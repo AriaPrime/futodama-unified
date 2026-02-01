@@ -36,6 +36,30 @@ export function CVTab({ language = 'en' }: CVTabProps) {
     }, 3000);
   }, []);
 
+  const handleContentUpdate = useCallback((sectionId: string, newContent: string) => {
+    if (!cv) return;
+
+    // Update the section content
+    const updatedSections = cv.sections.map(section => 
+      section.id === sectionId 
+        ? { ...section, content: newContent, wordCount: newContent.split(/\s+/).length }
+        : section
+    );
+
+    // Mark the observation as accepted
+    const updatedObservations = cv.observations.map(obs =>
+      obs.sectionId === sectionId && obs.status === 'pending'
+        ? { ...obs, status: 'accepted' as const }
+        : obs
+    );
+
+    setCV({
+      ...cv,
+      sections: updatedSections,
+      observations: updatedObservations,
+    });
+  }, [cv]);
+
   // Empty state - show uploader
   if (!cv) {
     return (
@@ -71,7 +95,9 @@ export function CVTab({ language = 'en' }: CVTabProps) {
 
         <CVSections
           sections={cv.sections}
+          observations={cv.observations}
           highlightedSectionId={highlightedSectionId}
+          onContentUpdate={handleContentUpdate}
           language={language}
         />
       </div>

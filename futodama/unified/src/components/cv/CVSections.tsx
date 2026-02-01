@@ -1,11 +1,13 @@
 'use client';
 
-import { CVSection } from '@/types/cv';
+import { CVSection, Observation } from '@/types/cv';
 import { RoleCard } from './RoleCard';
 
 interface CVSectionsProps {
   sections: CVSection[];
+  observations: Observation[];
   highlightedSectionId?: string;
+  onContentUpdate?: (sectionId: string, newContent: string) => void;
   language?: 'en' | 'da';
 }
 
@@ -20,7 +22,13 @@ const sectionTypeLabels: Record<string, { en: string; da: string }> = {
 
 const sectionTypeOrder = ['summary', 'job', 'education', 'skill', 'project', 'other'];
 
-export function CVSections({ sections, highlightedSectionId, language = 'en' }: CVSectionsProps) {
+export function CVSections({ 
+  sections, 
+  observations,
+  highlightedSectionId, 
+  onContentUpdate,
+  language = 'en' 
+}: CVSectionsProps) {
   // Group sections by type
   const groupedSections = sections.reduce((acc, section) => {
     const type = section.type || 'other';
@@ -37,6 +45,14 @@ export function CVSections({ sections, highlightedSectionId, language = 'en' }: 
       label: sectionTypeLabels[type]?.[language] || type,
       sections: groupedSections[type],
     }));
+
+  // Create a map of section ID to pending observation
+  const sectionObservationMap = observations.reduce((acc, obs) => {
+    if (obs.status === 'pending' && !acc[obs.sectionId]) {
+      acc[obs.sectionId] = obs;
+    }
+    return acc;
+  }, {} as Record<string, Observation>);
 
   if (sections.length === 0) {
     return (
@@ -63,7 +79,9 @@ export function CVSections({ sections, highlightedSectionId, language = 'en' }: 
               <RoleCard
                 key={section.id}
                 section={section}
+                observation={sectionObservationMap[section.id]}
                 isHighlighted={section.id === highlightedSectionId}
+                onContentUpdate={onContentUpdate}
                 language={language}
               />
             ))}
