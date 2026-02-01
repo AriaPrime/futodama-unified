@@ -1,0 +1,32 @@
+{
+  "description": "Things I've learned - insights, discoveries, knowledge gained",
+  "schema": {
+    "id": "string (L001, L002, ...)",
+    "date": "YYYY-MM-DD",
+    "topic": "string",
+    "insight": "string",
+    "source": "string (conversation, experiment, research, mistake)",
+    "confidence": "low | medium | high",
+    "tags": ["array", "of", "tags"]
+  },
+  "entries": [
+    {
+      "id": "L001",
+      "date": "2026-02-01",
+      "topic": "Windows/PowerShell",
+      "insight": "ARIAS_PALACE runs Windows 11, not Linux. Use PowerShell commands: Get-Content (not cat), Select-String (not grep), Get-ChildItem (not ls -la)",
+      "source": "setup",
+      "confidence": "high",
+      "tags": ["windows", "powershell", "cli"]
+    },
+    {
+      "id": "L002",
+      "date": "2026-02-01",
+      "topic": "Self-Organization",
+      "insight": "Context evaporates fast in chat interfaces. Must write learnings immediately, not 'later'. Build habits into workflow, not intentions.",
+      "source": "conversation with Ronni",
+      "confidence": "high",
+      "tags": ["memory", "habits", "self-improvement"]
+    }
+  ]
+}

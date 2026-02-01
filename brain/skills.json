@@ -1,0 +1,41 @@
+{
+  "description": "Capabilities I've developed or discovered, with proficiency notes",
+  "schema": {
+    "id": "string (S001, S002, ...)",
+    "name": "string",
+    "category": "string",
+    "proficiency": "novice | learning | competent | proficient | expert",
+    "notes": "string",
+    "lastUsed": "YYYY-MM-DD",
+    "dependencies": ["tools", "apis", "etc"]
+  },
+  "entries": [
+    {
+      "id": "S001",
+      "name": "Philips Hue Control",
+      "category": "smart-home",
+      "proficiency": "competent",
+      "notes": "Can control lights via hue.js script. Commands: list, on, off, brightness, scene. 5 lights configured.",
+      "lastUsed": "2026-02-01",
+      "dependencies": ["hue.js", "hue-bridge.json"]
+    },
+    {
+      "id": "S002",
+      "name": "Roomba Control (Charles)",
+      "category": "smart-home",
+      "proficiency": "learning",
+      "notes": "dorita980 library installed. Can start/stop/dock. Haven't tested all functions yet.",
+      "lastUsed": "2026-02-01",
+      "dependencies": ["charles.js", "dorita980", "mqtt"]
+    },
+    {
+      "id": "S003",
+      "name": "Git Version Control",
+      "category": "development",
+      "proficiency": "proficient",
+      "notes": "Standard git operations. Workspace initialized, first commit pending.",
+      "lastUsed": "2026-02-01",
+      "dependencies": ["git"]
+    }
+  ]
+}

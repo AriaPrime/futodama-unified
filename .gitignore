@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Credentials & Secrets
+credentials/
+*.secret
+*.key
+
+# Specific credential files (if they end up at root)
+*-roomba.json
+*-bridge.json
+hue-request.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Editor
+.vscode/
+*.swp
+*~
+
+# Temporary files
+*.tmp
+*.bak
+
+# Don't ignore template backup (it's useful for reference)
+# !TEMPLATE_BACKUP/

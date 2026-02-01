@@ -1,0 +1,23 @@
+{
+  "description": "Failures and the lessons learned from them - this is where growth happens",
+  "schema": {
+    "id": "string (M001, M002, ...)",
+    "date": "YYYY-MM-DD",
+    "what": "string - what went wrong",
+    "context": "string - situation",
+    "lesson": "string - what I learned",
+    "severity": "minor | moderate | significant",
+    "resolved": "boolean"
+  },
+  "entries": [
+    {
+      "id": "M001",
+      "date": "2026-02-01",
+      "what": "Tried to use Linux commands (cat, grep) on Windows",
+      "context": "First exploration of ARIAS_PALACE filesystem",
+      "lesson": "Always check the OS first. ARIAS_PALACE is Windows, use PowerShell commands.",
+      "severity": "minor",
+      "resolved": true
+    }
+  ]
+}
