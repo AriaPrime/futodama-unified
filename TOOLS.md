@@ -55,6 +55,12 @@ You're running on Windows 11 with PowerShell. **Do not use bash/Linux commands.*
 - **OpenAI Image Gen** — for image generation
 - **OpenAI Whisper** — for speech-to-text
 
+### Development Tools
+- **Git** — v2.52.0 (installed)
+- **GitHub CLI** — v2.85.0 (installed 2026-02-01)
+- **Claude Code** — v2.1.29 (installed)
+- **Node.js** — v24.13.0 (installed)
+
 ### Communication
 - **Slack** — Primary channel, socket mode
   - Workspace: Privateers team workspace
