@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { Download, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { CVUploader } from './CVUploader';
 import { CVSections } from './CVSections';
 import { CVHealthWidget } from './CVHealthWidget';
+import { EmptyState } from './EmptyState';
 import { CV, AnalyzeResponse } from '@/types/cv';
 
 interface CVTabProps {
@@ -60,10 +63,16 @@ export function CVTab({ language = 'en' }: CVTabProps) {
     });
   }, [cv]);
 
-  // Empty state - show uploader
+  const handleReset = () => {
+    setCV(null);
+    setHighlightedSectionId(undefined);
+  };
+
+  // Empty state - show uploader with intro
   if (!cv) {
     return (
-      <div className="max-w-2xl mx-auto py-8">
+      <div className="max-w-2xl mx-auto py-8 space-y-8">
+        <EmptyState language={language} />
         <CVUploader 
           onUploadComplete={handleUploadComplete} 
           language={language} 
@@ -72,46 +81,78 @@ export function CVTab({ language = 'en' }: CVTabProps) {
     );
   }
 
+  // Calculate stats
+  const totalSections = cv.sections.length;
+  const totalObservations = cv.observations.length;
+  const pendingObservations = cv.observations.filter(o => o.status === 'pending').length;
+  const acceptedObservations = cv.observations.filter(o => o.status === 'accepted').length;
+
   // Has CV - show analysis
   return (
-    <div className="flex gap-6">
-      {/* Main content - CV sections */}
-      <div className="flex-1 min-w-0">
-        <div className="mb-4 flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Header bar */}
+      <div className="flex items-center justify-between pb-4 border-b">
+        <div className="flex items-center gap-4">
           <div>
-            <h2 className="text-lg font-semibold">{cv.fileName}</h2>
-            <p className="text-sm text-muted-foreground">
-              {cv.sections.length} {language === 'da' ? 'sektioner' : 'sections'} • {' '}
-              {new Date(cv.uploadedAt).toLocaleDateString(language === 'da' ? 'da-DK' : 'en-US')}
-            </p>
+            <h2 className="text-xl font-semibold text-foreground">{cv.fileName}</h2>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+              <span>{totalSections} {language === 'da' ? 'sektioner' : 'sections'}</span>
+              <span>•</span>
+              <span>{totalObservations} {language === 'da' ? 'observationer' : 'observations'}</span>
+              {acceptedObservations > 0 && (
+                <>
+                  <span>•</span>
+                  <span className="text-green-600">
+                    {acceptedObservations} {language === 'da' ? 'forbedret' : 'improved'}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
-          <button
-            onClick={() => setCV(null)}
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            {language === 'da' ? 'Upload ny' : 'Upload new'}
-          </button>
         </div>
-
-        <CVSections
-          sections={cv.sections}
-          observations={cv.observations}
-          highlightedSectionId={highlightedSectionId}
-          onContentUpdate={handleContentUpdate}
-          language={language}
-        />
+        
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleReset}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            {language === 'da' ? 'Ny analyse' : 'New analysis'}
+          </Button>
+        </div>
       </div>
 
-      {/* Sidebar - Health widget */}
-      <div className="w-80 shrink-0">
-        <div className="sticky top-4">
-          <CVHealthWidget
+      {/* Main content area */}
+      <div className="flex gap-6">
+        {/* CV sections */}
+        <div className="flex-1 min-w-0">
+          <CVSections
+            sections={cv.sections}
             observations={cv.observations}
-            strengths={cv.strengths}
-            onSelectObservation={handleSelectObservation}
+            highlightedSectionId={highlightedSectionId}
+            onContentUpdate={handleContentUpdate}
             language={language}
           />
         </div>
+
+        {/* Health widget sidebar */}
+        <div className="w-80 shrink-0 hidden lg:block">
+          <div className="sticky top-24">
+            <CVHealthWidget
+              observations={cv.observations}
+              strengths={cv.strengths}
+              onSelectObservation={handleSelectObservation}
+              language={language}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile health widget - shows at bottom on small screens */}
+      <div className="lg:hidden">
+        <CVHealthWidget
+          observations={cv.observations}
+          strengths={cv.strengths}
+          onSelectObservation={handleSelectObservation}
+          language={language}
+        />
       </div>
     </div>
   );
