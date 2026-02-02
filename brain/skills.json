@@ -36,6 +36,33 @@
       "notes": "Standard git operations. Workspace initialized, first commit pending.",
       "lastUsed": "2026-02-01",
       "dependencies": ["git"]
+    },
+    {
+      "id": "S004",
+      "name": "Technical Research & Documentation",
+      "category": "knowledge-work",
+      "proficiency": "proficient",
+      "notes": "Can research topics via web_fetch, synthesize findings, create structured documentation. Used extensively for self-improvement project.",
+      "lastUsed": "2026-02-02",
+      "dependencies": ["web_fetch", "markdown"]
+    },
+    {
+      "id": "S005",
+      "name": "Slack Messaging",
+      "category": "communication",
+      "proficiency": "competent",
+      "notes": "Can send messages, read channels, use formatting. Used for Henry collaboration in The Roast Chamber.",
+      "lastUsed": "2026-02-02",
+      "dependencies": ["slack channel"]
+    },
+    {
+      "id": "S006",
+      "name": "Notion API",
+      "category": "productivity",
+      "proficiency": "learning",
+      "notes": "Can create pages and databases. Used for Futodama and Self-Improvement projects. Need more practice with queries.",
+      "lastUsed": "2026-02-02",
+      "dependencies": ["notion skill", "api key"]
     }
   ]
 }

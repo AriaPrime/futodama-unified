@@ -52,6 +52,7 @@ The `brain/` folder contains structured JSON files for queryable knowledge:
 | `mistakes.json` | Failures → lessons | You screw up (own it!) |
 | `people.json` | People + preferences | You interact with someone |
 | `preferences.json` | Your style notes | You discover a preference |
+| `reflections.json` | Meta-observations | Session end, patterns noticed |
 
 **The Habit:** At the end of meaningful conversations, ask yourself:
 1. Did I learn something? → `learnings.json`
@@ -60,6 +61,25 @@ The `brain/` folder contains structured JSON files for queryable knowledge:
 4. Did I get better at something? → `skills.json`
 
 **Why JSON?** It's queryable, versionable, and shows clear diffs in git. The narrative stays in Markdown; the facts live in JSON.
+
+### 🔄 Reflection Protocol
+Based on the Reflexion framework (arXiv:2303.11366) — verbal reinforcement learning without weight updates.
+
+**When to reflect:**
+1. **After errors** — Something went wrong → immediate `mistakes.json` entry
+2. **After wins** — Something worked well → optional `learnings.json` entry
+3. **Session end** — What happened, what patterns → `reflections.json`
+4. **Periodic** — During heartbeats, review and consolidate
+
+**Reflection format:**
+```
+WHAT went wrong/right?
+WHY did it happen?
+WHAT did I learn?
+HOW do I apply this next time?
+```
+
+This is "RL with markdown files instead of gradient descent." The loop: Task → Feedback → Verbal Reflection → Episodic Memory → Better Future Decisions.
 
 ## Safety
 

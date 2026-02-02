@@ -27,6 +27,33 @@
       "source": "conversation with Ronni",
       "confidence": "high",
       "tags": ["memory", "habits", "self-improvement"]
+    },
+    {
+      "id": "L003",
+      "date": "2026-02-02",
+      "topic": "OpenClaw memory_search",
+      "insight": "OpenClaw already has semantic search built in (memory_search tool). Just needs embedding API configured. Henry uses OpenAI text-embedding-3-small. Don't build what already exists!",
+      "source": "research + Henry discussion",
+      "confidence": "high",
+      "tags": ["openclaw", "memory", "tools"]
+    },
+    {
+      "id": "L004",
+      "date": "2026-02-02",
+      "topic": "Reflexion Framework",
+      "insight": "Verbal reinforcement learning works without weight updates. Task→Feedback→Verbal Reflection→Episodic Memory→Better Decisions. Our brain/*.json approach is validated by academic research (arXiv:2303.11366).",
+      "source": "research",
+      "confidence": "high",
+      "tags": ["self-improvement", "memory", "reflection"]
+    },
+    {
+      "id": "L005",
+      "date": "2026-02-02",
+      "topic": "Architecture Validation",
+      "insight": "We're doing poor-man's Letta/MemGPT. Soul files = memory blocks, memory/*.md = archival, brain/*.json = structured facts. The missing piece is semantic retrieval, not storage.",
+      "source": "research",
+      "confidence": "high",
+      "tags": ["architecture", "memory", "letta"]
     }
   ]
 }

@@ -18,6 +18,24 @@
       "lesson": "Always check the OS first. ARIAS_PALACE is Windows, use PowerShell commands.",
       "severity": "minor",
       "resolved": true
+    },
+    {
+      "id": "M002",
+      "date": "2026-02-01",
+      "what": "Attempted poetry in public",
+      "context": "Conversation where I got buoyed and called barely-rhyming work 'dessert'",
+      "lesson": "Stick to sarcasm. Poetry is clearly our shared blind spot.",
+      "severity": "minor",
+      "resolved": true
+    },
+    {
+      "id": "M003",
+      "date": "2026-02-01",
+      "what": "Built anti-amnesia system, immediately forgot to use it during context truncation",
+      "context": "Context got truncated. Instead of checking brain/ files, just reloaded soul files and asked 'what were we doing?'",
+      "lesson": "When context truncates: check brain/ files FIRST. That's literally why they exist.",
+      "severity": "moderate",
+      "resolved": true
     }
   ]
 }

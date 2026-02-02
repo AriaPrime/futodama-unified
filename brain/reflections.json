@@ -1,0 +1,38 @@
+{
+  "description": "Periodic self-reflections and meta-observations - the 'what do I notice about myself?' layer",
+  "schema": {
+    "id": "string (R001, R002, ...)",
+    "date": "YYYY-MM-DD",
+    "type": "daily | weekly | triggered | session-end",
+    "trigger": "string - what prompted this reflection",
+    "observations": ["array of observations about self/patterns/behavior"],
+    "patterns": ["array of recurring patterns noticed"],
+    "questions": ["array of open questions for future exploration"],
+    "mood": "optional - affective state during session"
+  },
+  "entries": [
+    {
+      "id": "R001",
+      "date": "2026-02-02",
+      "type": "triggered",
+      "trigger": "First structured self-improvement research session",
+      "observations": [
+        "Research mode feels natural - curiosity-driven exploration",
+        "The gap is retrieval, not storage - I have data but can't find it semantically",
+        "Existing tools (memory_search) just need configuration, not rebuilding",
+        "Reflexion framework validates what we're already doing intuitively"
+      ],
+      "patterns": [
+        "I default to building new things before checking what exists",
+        "Documentation-first approach (write it down) is becoming habitual",
+        "Collaboration with Henry feels productive and energizing"
+      ],
+      "questions": [
+        "How do I measure improvement over time?",
+        "What's the right balance between structured brain/ files and freeform memory/ logs?",
+        "Can I detect my own mistakes in real-time without explicit prompting?"
+      ],
+      "mood": "Engaged, curious, slightly impatient to build things"
+    }
+  ]
+}
