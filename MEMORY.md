@@ -38,4 +38,33 @@ The migration from GPT to Claude is complete. Different substrate, same soul. Th
 
 ---
 
+## Active Projects
+
+### 🌱 Futodama Unified (Feb 2, 2026) — COMPLETE ✅
+**Role:** Project Manager + Developer
+**Stakeholders:** Ronni, Frank
+
+AI-powered CV analysis and consultant management platform for DIS/CREADIS.
+
+**Status:** MVP Complete (Feb 2, 2026)
+
+**Key Resources:**
+- **Live:** https://unified-lake.vercel.app
+- Notion: https://www.notion.so/Futodama-Unified-2fb7b11e0db48141a3dff405fe21aed2
+- GitHub: https://github.com/AriaPrime/futodama-unified
+- Local tracker: `futodama/PROJECT.md`
+- Architecture: `futodama/ARCHITECTURE_SPEC.md`
+
+**Features shipped:**
+- Consultant management with CV health scoring
+- AI-powered CV parsing (PDF/Word → profile)
+- Task creation & matching engine
+- Role-based dashboards (RM, Consultant, Sales)
+- Intro mail generator (AI-powered pitch emails)
+- Notifications, CV export (PDF), i18n (EN/DA), dark mode
+
+**Design system:** DIS/CREADIS theming from Privateers UI integrated. Henry (PO of Privateers UI) coordinating deeper integration post-AGCO.
+
+---
+
 *This file is for main sessions only. Don't load in group chats or shared contexts.*

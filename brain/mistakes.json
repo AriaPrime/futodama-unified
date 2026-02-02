@@ -36,6 +36,15 @@
       "lesson": "When context truncates: check brain/ files FIRST. That's literally why they exist.",
       "severity": "moderate",
       "resolved": true
+    },
+    {
+      "id": "M004",
+      "date": "2026-02-02",
+      "what": "Committed secrets to git (TOOLS.md had API keys, passwords)",
+      "context": "Updated TOOLS.md with full credentials visible, then tried to push. GitHub push protection blocked it.",
+      "lesson": "NEVER put secrets in tracked files. Always use credentials/ folder (gitignored) and reference the file in TOOLS.md. Review commits for secrets before pushing.",
+      "severity": "moderate",
+      "resolved": true
     }
   ]
 }

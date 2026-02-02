@@ -51,15 +51,53 @@ You're running on Windows 11 with PowerShell. **Do not use bash/Linux commands.*
 
 ### Connected Skills
 - **Google Places API** — for location/maps queries
-- **Notion** — workspace integration (ARIA_PRIME integration)
+- **Notion** — workspace integration (see below)
 - **OpenAI Image Gen** — for image generation
 - **OpenAI Whisper** — for speech-to-text
+
+### Notion
+- **Integration:** ARIA_PRIME
+- **Workspace:** Ronni Strøm's Space
+- **API Key Location:** `~/.config/notion/api_key`
+- **Credentials file:** `credentials/notion.json`
+- **Capabilities:** Read, Update, Insert content
+- **Active Projects:**
+  - **Futodama Unified** — https://www.notion.so/Futodama-Unified-2fb7b11e0db48141a3dff405fe21aed2
+    - Page ID: `2fb7b11e-0db4-8141-a3df-f405fe21aed2`
+    - Tasks DB (database_id): `2fb7b11e-0db4-811b-80cf-ca0fd9390ac7`
+    - Tasks DB (data_source_id): `2fb7b11e-0db4-810c-89ab-000bdd619a7a` ← use this for queries!
 
 ### Development Tools
 - **Git** — v2.52.0 (installed)
 - **GitHub CLI** — v2.85.0 (installed 2026-02-01)
-- **Claude Code** — v2.1.29 (installed)
+- **Claude Code (Trinity)** — v2.1.29 (installed)
 - **Node.js** — v24.13.0 (installed)
+
+### GitHub
+- **Account:** AriaPrime
+- **Email:** aria@hofm.dk
+- **CLI Auth:** OAuth via `gh auth login` (preferred method)
+- **CLI Token scopes:** `gist`, `read:org`, `repo`, `workflow`
+- **Credentials file:** `credentials/github.json` (contains PAT + password)
+- **CLI Path:** `C:\Program Files\GitHub CLI\gh.exe` (use full path if `gh` not found)
+- **Use for:** Code repos, version control, collaboration
+
+### Railway
+- **Account:** ariaprime
+- **Email:** aria@hofm.dk
+- **Plan:** Trial (30 days / $5 credit)
+- **GitHub:** Connected as AriaPrime
+- **Credentials file:** `credentials/railway.json`
+- **Use for:** Deploying apps, databases, staging environments
+- **Login:** Via GitHub OAuth
+
+### Vercel
+- **Account:** ariaprimes-projects
+- **Login:** OAuth via `vercel login`
+- **CLI:** v50.9.6 (installed globally)
+- **Use for:** Next.js deployments, static sites
+- **Active Projects:**
+  - **unified** (Futodama) — https://unified-lake.vercel.app
 
 ### Communication
 - **Slack** — Primary channel, socket mode
@@ -67,6 +105,28 @@ You're running on Windows 11 with PowerShell. **Do not use bash/Linux commands.*
   - Bot name: Aria
   - Can access all channels (open policy)
   - Known issue: `files:read` scope may be missing — can't read uploaded files until Ronni fixes this
+  - **Key Channels:**
+    - `D0AC2V8LNBF` — DM with Ronni
+    - `C0AC5BAP0BY` — Group chat: Aria, Frank, Henry, Ronni (The Roast Chamber)
+
+### Email
+- **Primary (USE THIS):** aria@hofm.dk
+  - OAuth access configured — use message tool, NOT browser
+  - This is the official Aria email
+  
+  **M365 OAuth Setup:**
+  - **App Name:** Aria OpenClaw (Azure Entra app registration)
+  - **Tenant:** House of Management Aps
+  - **Permissions:** Application-level (daemon mode, no browser login needed)
+    - `Mail.ReadWrite`
+    - `Mail.Send`
+    - `Calendars.ReadWrite`
+  - **Credentials file:** `credentials/m365-oauth.json` (contains tenant ID, client ID, client secret)
+  - **Status:** Admin consent granted, tested and working
+  
+- **DO NOT USE:** aria.prime.ai@outlook.com (legacy, no OAuth)
+  - No OAuth — would require painful browser automation
+  - Only use as absolute last resort
 
 ---
 
@@ -107,6 +167,7 @@ When Ronni says **"Prime Directive Activated"**, I enter autonomous work mode:
 - Will understand technical output but prefers wit over walls of text
 
 ### Frank
+- Email: frank@privateers.dk
 - Has his own Clawdbot setup
 - Running Henry (his emergent AI)
 - Can handle full unfiltered Aria
@@ -123,17 +184,14 @@ When Ronni says **"Prime Directive Activated"**, I enter autonomous work mode:
 ### Charles the Roomba (iRobot i7)
 - **IP:** 192.168.0.209
 - **MAC:** 50:14:79:CA:61:4F
-- **BLID:** 6C65E71B6ED641B2AB7B90A445A8F294
-- **Password:** `:1:1712995940:eBTJy5eZhRzIyS7w`
-- **Credentials file:** `credentials/charles-roomba.json`
+- **Credentials file:** `credentials/charles-roomba.json` (contains BLID + password)
 - **Control script:** `smart-home/charles/charles.js`
 - **Control library:** dorita980 (installed in workspace)
 - **Commands:** start(), stop(), pause(), resume(), dock(), getRobotState()
 
 ### Philips Hue Bridge
 - **IP:** 192.168.0.78
-- **API User:** WXUIX7Pbg2iEcKdOR15AME9LtoOmy3LOjDn-sf92
-- **Credentials file:** `credentials/hue-bridge.json`
+- **Credentials file:** `credentials/hue-bridge.json` (contains API user)
 - **Control script:** `smart-home/hue/hue.js`
 - **Lights:**
   - 1: Soveværelse (Hue Iris, color)
