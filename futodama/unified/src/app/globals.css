@@ -112,7 +112,7 @@
 /* Dark mode for DIS/CREADIS */
 .dark {
   /* Base colors */
-  --background: oklch(0.3103 0.0503 157.05);
+  --background: oklch(0.2368 0.0148 220.58);
   --foreground: oklch(0.95 0.005 250);
 
   /* Card */
