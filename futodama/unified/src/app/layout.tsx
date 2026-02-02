@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Futodama | CV Analysis Platform",
-  description: "AI-powered CV analysis and improvement suggestions for DIS/CREADIS consultants",
-  keywords: ["CV", "resume", "analysis", "AI", "consultant", "career"],
+  title: "CVs & Matching | DIS/CREADIS",
+  description: "AI-powered CV analysis and consultant matching for DIS/CREADIS",
+  keywords: ["CV", "resume", "analysis", "AI", "consultant", "matching", "DIS", "CREADIS"],
   authors: [{ name: "Aria", url: "https://github.com/AriaPrime" }],
   creator: "Aria @ Privateers",
 };
