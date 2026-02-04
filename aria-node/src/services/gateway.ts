@@ -16,7 +16,7 @@ import {
 } from '../types/protocol';
 
 const PROTOCOL_VERSION = 3;
-const APP_VERSION = '0.1.5';
+const APP_VERSION = '0.1.6';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 type MessageHandler = (message: GatewayMessage) => void;
