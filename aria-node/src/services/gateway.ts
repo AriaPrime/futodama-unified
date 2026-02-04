@@ -474,10 +474,10 @@ export class GatewayService {
       commands: this.commands,
       permissions: this.permissions,
       auth: {
-        // Only send deviceToken for node connections
-        // gatewayToken is for operator auth, not node auth
-        // If we don't have deviceToken, we're a new node requesting pairing
-        token: this.deviceToken || undefined,
+        // For initial pairing: use gatewayToken (operator auth from UI Token field)
+        // For paired nodes: use deviceToken
+        // Both must match what's in the signature payload!
+        token: this.deviceToken || this.gatewayToken || undefined,
       },
       locale: 'en-US',
       userAgent: `aria-node/${APP_VERSION}`,
@@ -498,8 +498,9 @@ export class GatewayService {
     // OpenClaw v2 payload format:
     // v2|{deviceId}|{clientId}|{clientMode}|{role}|{scopes}|{signedAtMs}|{token}|{nonce}
     // IMPORTANT: token must match what we send in connect auth!
-    // For node role without deviceToken, token should be empty string
-    const authToken = this.deviceToken || '';  // ONLY use deviceToken, not gatewayToken
+    // For initial pairing: use gatewayToken (operator auth)
+    // For paired nodes: use deviceToken
+    const authToken = this.deviceToken || this.gatewayToken || '';
     const parts = [
       'v2',
       this.deviceId,

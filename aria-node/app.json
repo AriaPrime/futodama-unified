@@ -2,7 +2,7 @@
   "expo": {
     "name": "Aria Node",
     "slug": "aria-node",
-    "version": "0.2.8",
+    "version": "0.2.9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
