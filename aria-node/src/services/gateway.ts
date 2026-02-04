@@ -1,0 +1,434 @@
+// Gateway WebSocket Connection Service
+
+import * as Crypto from 'expo-crypto';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
+import nacl from 'tweetnacl';
+import { encodeBase64, decodeBase64 } from 'tweetnacl-util';
+import {
+  GatewayMessage,
+  GatewayRequest,
+  GatewayResponse,
+  GatewayEvent,
+  ConnectParams,
+  HelloOkPayload,
+  NodeInvokeParams,
+} from '../types/protocol';
+
+const PROTOCOL_VERSION = 3;
+const APP_VERSION = '0.1.4';
+
+type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
+type MessageHandler = (message: GatewayMessage) => void;
+type StateChangeHandler = (state: ConnectionState) => void;
+type InvokeHandler = (command: string, params: Record<string, unknown>) => Promise<unknown>;
+
+interface PendingRequest {
+  resolve: (payload: unknown) => void;
+  reject: (error: Error) => void;
+  timeout: ReturnType<typeof setTimeout>;
+}
+
+export class GatewayService {
+  private ws: WebSocket | null = null;
+  private host: string = '';
+  private port: number = 18789;
+  private gatewayToken: string = '';
+  private state: ConnectionState = 'disconnected';
+  private deviceId: string = '';
+  private publicKey: string = '';
+  private secretKey: Uint8Array | null = null;
+  private deviceToken: string | null = null;
+  private pendingRequests: Map<string, PendingRequest> = new Map();
+  private messageHandlers: Set<MessageHandler> = new Set();
+  private stateChangeHandlers: Set<StateChangeHandler> = new Set();
+  private invokeHandler: InvokeHandler | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private tickTimer: ReturnType<typeof setInterval> | null = null;
+  private tickIntervalMs: number = 15000;
+  private challengeNonce: string = '';
+
+  // Capabilities this node exposes
+  private capabilities = ['camera', 'location'];
+  private commands = ['camera.snap', 'camera.list', 'location.get'];
+  private permissions: Record<string, boolean> = {
+    'camera.capture': true,
+    'location.get': true,
+  };
+
+  async initialize(): Promise<void> {
+    // Generate or retrieve Ed25519 keypair
+    let storedPublicKey = await SecureStore.getItemAsync('publicKey');
+    let storedSecretKey = await SecureStore.getItemAsync('secretKey');
+
+    if (!storedPublicKey || !storedSecretKey) {
+      // Generate new Ed25519 keypair
+      const keyPair = nacl.sign.keyPair();
+      storedPublicKey = encodeBase64(keyPair.publicKey);
+      storedSecretKey = encodeBase64(keyPair.secretKey);
+      await SecureStore.setItemAsync('publicKey', storedPublicKey);
+      await SecureStore.setItemAsync('secretKey', storedSecretKey);
+      console.log('[Gateway] Generated new Ed25519 keypair');
+    }
+
+    this.publicKey = storedPublicKey;
+    this.secretKey = decodeBase64(storedSecretKey);
+
+    // Device ID is derived from public key (SHA256 of it)
+    this.deviceId = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      storedPublicKey
+    );
+
+    // Retrieve stored device token if any
+    this.deviceToken = await SecureStore.getItemAsync('deviceToken');
+
+    // Retrieve stored gateway config
+    const storedHost = await SecureStore.getItemAsync('gatewayHost');
+    const storedPort = await SecureStore.getItemAsync('gatewayPort');
+    const storedGatewayToken = await SecureStore.getItemAsync('gatewayToken');
+    if (storedHost) this.host = storedHost;
+    if (storedPort) this.port = parseInt(storedPort, 10);
+    if (storedGatewayToken) this.gatewayToken = storedGatewayToken;
+
+    console.log('[Gateway] Initialized with deviceId:', this.deviceId.substring(0, 16) + '...');
+  }
+
+  setGateway(host: string, port: number = 18789, token: string = ''): void {
+    this.host = host;
+    this.port = port;
+    this.gatewayToken = token;
+    SecureStore.setItemAsync('gatewayHost', host);
+    SecureStore.setItemAsync('gatewayPort', port.toString());
+    if (token) SecureStore.setItemAsync('gatewayToken', token);
+    
+    // Clear device token when setting new gateway - forces fresh pairing
+    this.deviceToken = null;
+    SecureStore.deleteItemAsync('deviceToken');
+  }
+
+  async resetPairing(): Promise<void> {
+    // Clear all stored pairing data
+    this.deviceToken = null;
+    await SecureStore.deleteItemAsync('deviceToken');
+    await SecureStore.deleteItemAsync('publicKey');
+    await SecureStore.deleteItemAsync('secretKey');
+    
+    // Generate new Ed25519 keypair
+    const keyPair = nacl.sign.keyPair();
+    const newPublicKey = encodeBase64(keyPair.publicKey);
+    const newSecretKey = encodeBase64(keyPair.secretKey);
+    await SecureStore.setItemAsync('publicKey', newPublicKey);
+    await SecureStore.setItemAsync('secretKey', newSecretKey);
+    
+    this.publicKey = newPublicKey;
+    this.secretKey = keyPair.secretKey;
+    
+    // Device ID is derived from public key
+    this.deviceId = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      newPublicKey
+    );
+    
+    console.log('[Gateway] Pairing reset, new device ID:', this.deviceId.substring(0, 16) + '...');
+  }
+
+  getGatewayToken(): string {
+    return this.gatewayToken;
+  }
+
+  setInvokeHandler(handler: InvokeHandler): void {
+    this.invokeHandler = handler;
+  }
+
+  onMessage(handler: MessageHandler): () => void {
+    this.messageHandlers.add(handler);
+    return () => this.messageHandlers.delete(handler);
+  }
+
+  onStateChange(handler: StateChangeHandler): () => void {
+    this.stateChangeHandlers.add(handler);
+    return () => this.stateChangeHandlers.delete(handler);
+  }
+
+  getState(): ConnectionState {
+    return this.state;
+  }
+
+  getDeviceId(): string {
+    return this.deviceId;
+  }
+
+  connect(): void {
+    if (this.state !== 'disconnected' || !this.host) {
+      return;
+    }
+
+    this.setState('connecting');
+    // Include gateway token in URL for server-level auth
+    const url = this.gatewayToken 
+      ? `ws://${this.host}:${this.port}?token=${encodeURIComponent(this.gatewayToken)}`
+      : `ws://${this.host}:${this.port}`;
+    
+    console.log('[Gateway] Connecting to:', url.replace(/token=[^&]+/, 'token=***'));
+    
+    try {
+      this.ws = new WebSocket(url);
+      
+      this.ws.onopen = () => {
+        console.log('[Gateway] WebSocket connected, waiting for challenge...');
+      };
+
+      this.ws.onmessage = (event) => {
+        this.handleMessage(event.data);
+      };
+
+      this.ws.onerror = (error) => {
+        console.error('[Gateway] WebSocket error:', error);
+      };
+
+      this.ws.onclose = (event) => {
+        console.log('[Gateway] WebSocket closed:', event.code, event.reason);
+        this.handleDisconnect();
+      };
+    } catch (error) {
+      console.error('[Gateway] Connection failed:', error);
+      this.handleDisconnect();
+    }
+  }
+
+  disconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.tickTimer) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = null;
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    this.setState('disconnected');
+  }
+
+  private setState(state: ConnectionState): void {
+    this.state = state;
+    this.stateChangeHandlers.forEach((handler) => handler(state));
+  }
+
+  private handleMessage(data: string): void {
+    try {
+      const message: GatewayMessage = JSON.parse(data);
+      
+      // Notify all handlers
+      this.messageHandlers.forEach((handler) => handler(message));
+
+      if (message.type === 'event') {
+        this.handleEvent(message as GatewayEvent);
+      } else if (message.type === 'res') {
+        this.handleResponse(message as GatewayResponse);
+      } else if (message.type === 'req') {
+        this.handleRequest(message as GatewayRequest);
+      }
+    } catch (error) {
+      console.error('[Gateway] Failed to parse message:', error);
+    }
+  }
+
+  private async handleEvent(event: GatewayEvent): Promise<void> {
+    if (event.event === 'connect.challenge') {
+      // Received challenge, now send connect request
+      this.challengeNonce = (event.payload as { nonce: string }).nonce;
+      await this.sendConnect();
+    } else if (event.event === 'node.invoke') {
+      // Handle node invoke from gateway
+      const params = event.payload as NodeInvokeParams;
+      if (this.invokeHandler) {
+        try {
+          const result = await this.invokeHandler(params.command, params.params);
+          // Send response back
+          // Note: node.invoke uses events, not req/res - check protocol
+        } catch (error) {
+          console.error('[Gateway] Invoke handler error:', error);
+        }
+      }
+    }
+  }
+
+  private handleResponse(response: GatewayResponse): void {
+    const pending = this.pendingRequests.get(response.id);
+    if (pending) {
+      clearTimeout(pending.timeout);
+      this.pendingRequests.delete(response.id);
+      
+      if (response.ok) {
+        // Check for hello-ok (connect response)
+        const payload = response.payload as HelloOkPayload;
+        if (payload?.type === 'hello-ok') {
+          this.handleHelloOk(payload);
+        }
+        pending.resolve(response.payload);
+      } else {
+        pending.reject(new Error(response.error?.message || 'Request failed'));
+      }
+    }
+  }
+
+  private async handleRequest(request: GatewayRequest): Promise<void> {
+    // Gateway sending a request to us (node.invoke)
+    if (request.method === 'node.invoke' && this.invokeHandler) {
+      const params = request.params as NodeInvokeParams;
+      try {
+        const result = await this.invokeHandler(params.command, params.params);
+        this.sendResponse(request.id, true, result);
+      } catch (error) {
+        this.sendResponse(request.id, false, undefined, {
+          code: 'INVOKE_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+  }
+
+  private handleHelloOk(payload: HelloOkPayload): void {
+    console.log('[Gateway] Connected successfully, protocol:', payload.protocol);
+    
+    if (payload.auth?.deviceToken) {
+      this.deviceToken = payload.auth.deviceToken;
+      SecureStore.setItemAsync('deviceToken', payload.auth.deviceToken);
+    }
+    
+    this.tickIntervalMs = payload.policy.tickIntervalMs;
+    this.setState('connected');
+    this.startTicking();
+  }
+
+  private handleDisconnect(): void {
+    this.ws = null;
+    if (this.tickTimer) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = null;
+    }
+    this.setState('disconnected');
+    
+    // Auto-reconnect after delay
+    if (!this.reconnectTimer && this.host) {
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        this.connect();
+      }, 5000);
+    }
+  }
+
+  private async sendConnect(): Promise<void> {
+    const signedAt = Date.now();
+    const signature = this.signChallenge(this.challengeNonce, signedAt);
+    
+    const connectParams: ConnectParams = {
+      minProtocol: PROTOCOL_VERSION,
+      maxProtocol: PROTOCOL_VERSION,
+      client: {
+        id: 'openclaw-ios',
+        version: APP_VERSION,
+        platform: Platform.OS,
+        mode: 'node',
+      },
+      role: 'node',
+      scopes: [],
+      caps: this.capabilities,
+      commands: this.commands,
+      permissions: this.permissions,
+      auth: {
+        // Only send device token for device-specific authentication
+        // Gateway token is not used in auth object - it's for server-level validation
+        token: this.deviceToken || undefined,
+      },
+      locale: 'en-US',
+      userAgent: `aria-node/${APP_VERSION}`,
+      device: {
+        id: this.deviceId,
+        publicKey: this.publicKey,
+        signature,
+        signedAt,
+        nonce: this.challengeNonce,
+      },
+    };
+
+    console.log('[Gateway] Sending connect with publicKey:', this.publicKey.substring(0, 20) + '...');
+    await this.send('connect', connectParams);
+  }
+
+  private signChallenge(nonce: string, signedAt: number): string {
+    if (!this.secretKey) {
+      throw new Error('Secret key not initialized');
+    }
+    
+    // Sign the challenge message: deviceId + nonce + signedAt
+    const message = `${this.deviceId}:${nonce}:${signedAt}`;
+    const messageBytes = new TextEncoder().encode(message);
+    const signatureBytes = nacl.sign.detached(messageBytes, this.secretKey);
+    return encodeBase64(signatureBytes);
+  }
+
+  private startTicking(): void {
+    if (this.tickTimer) {
+      clearInterval(this.tickTimer);
+    }
+    this.tickTimer = setInterval(() => {
+      if (this.state === 'connected') {
+        this.send('tick', {});
+      }
+    }, this.tickIntervalMs);
+  }
+
+  async send(method: string, params: Record<string, unknown>): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('Not connected'));
+        return;
+      }
+
+      const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const request: GatewayRequest = {
+        type: 'req',
+        id,
+        method,
+        params,
+      };
+
+      const timeout = setTimeout(() => {
+        this.pendingRequests.delete(id);
+        reject(new Error('Request timeout'));
+      }, 30000);
+
+      this.pendingRequests.set(id, { resolve, reject, timeout });
+      this.ws.send(JSON.stringify(request));
+    });
+  }
+
+  private sendResponse(
+    id: string,
+    ok: boolean,
+    payload?: unknown,
+    error?: { code: string; message: string }
+  ): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const response: GatewayResponse = {
+      type: 'res',
+      id,
+      ok,
+      payload: payload as Record<string, unknown>,
+      error,
+    };
+
+    this.ws.send(JSON.stringify(response));
+  }
+}
+
+// Singleton instance
+export const gateway = new GatewayService();

@@ -1,0 +1,79 @@
+{
+  "expo": {
+    "name": "Aria Node",
+    "slug": "aria-node",
+    "version": "0.1.4",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dk.hofm.aria.node",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Aria Node needs camera access to capture photos when requested by the gateway.",
+        "NSLocationWhenInUseUsageDescription": "Aria Node needs location access to share your position when requested by the gateway.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Aria Node needs background location access to share your position even when the app is in the background.",
+        "NSLocationAlwaysUsageDescription": "Aria Node needs background location access to share your position even when the app is in the background.",
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "location",
+          "fetch"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "dk.hofm.aria.node",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Aria Node needs camera access to capture photos when requested by the gateway."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Aria Node needs location access to share your position when requested.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b5ef94fc-45ed-4ff5-9d37-4f314cc23cd4"
+      }
+    }
+  }
+}
