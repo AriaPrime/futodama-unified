@@ -18,7 +18,7 @@ import { cameraService } from './src/services/camera';
 import { commandHandler, CameraCaptureCallback } from './src/services/commands';
 import { CameraSnapParams } from './src/types/protocol';
 
-const APP_VERSION = '0.1.8';
+const APP_VERSION = '0.1.9';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 
@@ -47,35 +47,46 @@ export default function App() {
 
   // Initialize services
   useEffect(() => {
+    // Log immediately to confirm useEffect runs
+    addLog('App starting...');
+    
     const init = async () => {
-      await gateway.initialize();
-      addLog('Gateway service initialized');
+      try {
+        addLog('Initializing gateway...');
+        await gateway.initialize();
+        addLog('Gateway initialized OK');
 
-      // Check permissions
-      const locPerm = await locationService.checkPermission();
-      setLocationPermission(locPerm);
+        // Set up gateway event handlers FIRST
+        gateway.onStateChange((state) => {
+          setConnectionState(state);
+          addLog(`State: ${state}`);
+        });
 
-      // Set up gateway event handlers
-      gateway.onStateChange((state) => {
-        setConnectionState(state);
-        addLog(`Connection state: ${state}`);
-      });
+        gateway.onLog((message) => {
+          addLog(`[GW] ${message}`);
+        });
 
-      gateway.onLog((message) => {
-        addLog(`[GW] ${message}`);
-      });
+        gateway.onMessage((message) => {
+          if (message.type === 'event') {
+            addLog(`Event: ${message.event}`);
+          }
+        });
 
-      gateway.onMessage((message) => {
-        if (message.type === 'event') {
-          addLog(`Event: ${message.event}`);
-        }
-      });
+        // Check permissions
+        const locPerm = await locationService.checkPermission();
+        setLocationPermission(locPerm);
+        addLog('Permissions checked');
 
-      // Set up command handler
-      gateway.setInvokeHandler(async (command, params) => {
-        addLog(`Invoke: ${command}`);
-        return await commandHandler.handle(command, params);
-      });
+        // Set up command handler
+        gateway.setInvokeHandler(async (command, params) => {
+          addLog(`Invoke: ${command}`);
+          return await commandHandler.handle(command, params);
+        });
+        
+        addLog('Ready!');
+      } catch (error) {
+        addLog('INIT ERROR: ' + (error instanceof Error ? error.message : String(error)));
+      }
     };
 
     init();
