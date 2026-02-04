@@ -16,7 +16,7 @@ import {
 } from '../types/protocol';
 
 const PROTOCOL_VERSION = 3;
-const APP_VERSION = '0.1.6';
+const APP_VERSION = '0.1.7';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 type MessageHandler = (message: GatewayMessage) => void;
@@ -176,19 +176,21 @@ export class GatewayService {
       this.ws = new WebSocket(url);
       
       this.ws.onopen = () => {
-        console.log('[Gateway] WebSocket connected, waiting for challenge...');
+        console.log('[Gateway] WebSocket connected to', url.replace(/token=[^&]+/, 'token=***'));
+        console.log('[Gateway] Waiting for connect.challenge event...');
       };
 
       this.ws.onmessage = (event) => {
+        console.log('[Gateway] Raw message received:', typeof event.data, event.data?.substring?.(0, 100));
         this.handleMessage(event.data);
       };
 
-      this.ws.onerror = (error) => {
-        console.error('[Gateway] WebSocket error:', error);
+      this.ws.onerror = (error: any) => {
+        console.error('[Gateway] WebSocket error:', error?.message || error?.type || JSON.stringify(error));
       };
 
       this.ws.onclose = (event) => {
-        console.log('[Gateway] WebSocket closed:', event.code, event.reason);
+        console.log('[Gateway] WebSocket closed - code:', event.code, 'reason:', event.reason || '(none)', 'wasClean:', event.wasClean);
         this.handleDisconnect();
       };
     } catch (error) {
@@ -238,9 +240,12 @@ export class GatewayService {
   }
 
   private async handleEvent(event: GatewayEvent): Promise<void> {
+    console.log('[Gateway] Received event:', event.event);
     if (event.event === 'connect.challenge') {
       // Received challenge, now send connect request
       this.challengeNonce = (event.payload as { nonce: string }).nonce;
+      console.log('[Gateway] Got challenge nonce, sending connect...');
+      console.log('[Gateway] Using gatewayToken:', this.gatewayToken ? 'SET (' + this.gatewayToken.substring(0, 8) + '...)' : 'NOT SET');
       await this.sendConnect();
     } else if (event.event === 'node.invoke') {
       // Handle node invoke from gateway
