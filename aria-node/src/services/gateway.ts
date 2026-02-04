@@ -16,7 +16,7 @@ import {
 } from '../types/protocol';
 
 const PROTOCOL_VERSION = 3;
-const APP_VERSION = '0.2.2';
+const APP_VERSION = '0.2.5';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 type MessageHandler = (message: GatewayMessage) => void;
@@ -81,7 +81,7 @@ export class GatewayService {
     const publicKeyBytes = decodeBase64(storedPublicKey);
     const hashBuffer = await Crypto.digest(
       Crypto.CryptoDigestAlgorithm.SHA256,
-      publicKeyBytes.buffer
+      publicKeyBytes  // Pass Uint8Array directly, not .buffer
     );
     // Convert to hex string
     this.deviceId = Array.from(new Uint8Array(hashBuffer))
@@ -135,7 +135,7 @@ export class GatewayService {
     // Device ID is derived from RAW public key bytes (SHA256 hex)
     const hashBuffer = await Crypto.digest(
       Crypto.CryptoDigestAlgorithm.SHA256,
-      keyPair.publicKey.buffer
+      keyPair.publicKey  // Pass Uint8Array directly, not .buffer
     );
     this.deviceId = Array.from(new Uint8Array(hashBuffer))
       .map(b => b.toString(16).padStart(2, '0'))
@@ -274,19 +274,82 @@ export class GatewayService {
       // Received challenge, now send connect request
       this.challengeNonce = (event.payload as { nonce: string }).nonce;
       this.log('Got challenge nonce, sending connect...');
-      this.log('Using gatewayToken: ' + (this.gatewayToken ? 'SET (' + this.gatewayToken.substring(0, 8) + '...)' : 'NOT SET'));
-      await this.sendConnect();
-    } else if (event.event === 'node.invoke') {
+      this.log('Using deviceToken: ' + (this.deviceToken ? 'SET (' + this.deviceToken.substring(0, 8) + '...)' : 'NOT SET (new device)'));
+      
+      // If we don't have a deviceToken, we're a new node - send pairing request immediately
+      // Don't wait for NOT_PAIRED error because connection might close too fast
+      if (!this.deviceToken) {
+        this.log('New device - sending pairing request proactively...');
+        this.setState('pairing');
+        await this.sendPairingRequest();
+      } else {
+        await this.sendConnect();
+      }
+    } else if (event.event === 'node.pair.resolved') {
+      // Pairing request was approved or rejected
+      const payload = event.payload as { status: string; token?: string; nodeId?: string };
+      if (payload.status === 'approved' && payload.token) {
+        this.log('🎉 Pairing APPROVED! Got device token.');
+        this.deviceToken = payload.token;
+        await SecureStore.setItemAsync('deviceToken', payload.token);
+        // Reconnect with the new token
+        this.disconnect();
+        setTimeout(() => this.connect(), 1000);
+      } else {
+        this.log('Pairing rejected or expired: ' + payload.status);
+        this.setState('disconnected');
+      }
+    } else if (event.event === 'node.invoke.request') {
       // Handle node invoke from gateway
-      const params = event.payload as NodeInvokeParams;
+      // Gateway sends: { id, nodeId, command, paramsJSON, timeoutMs }
+      // We must respond via node.invoke.result method
+      const payload = event.payload as {
+        id: string;
+        nodeId: string;
+        command: string;
+        paramsJSON?: string | null;
+        timeoutMs?: number;
+      };
+      
+      this.log(`Invoke request: ${payload.command} (id=${payload.id.substring(0, 8)}...)`);
+      
       if (this.invokeHandler) {
+        const params = payload.paramsJSON ? JSON.parse(payload.paramsJSON) : {};
         try {
-          const result = await this.invokeHandler(params.command, params.params);
-          // Send response back
-          // Note: node.invoke uses events, not req/res - check protocol
+          const result = await this.invokeHandler(payload.command, params);
+          // Send success result back via node.invoke.result
+          await this.send('node.invoke.result', {
+            id: payload.id,
+            nodeId: this.deviceId,
+            ok: true,
+            payloadJSON: JSON.stringify(result),
+          });
+          this.log(`Invoke completed: ${payload.command}`);
         } catch (error) {
-          this.log('Invoke handler error: ' + (error instanceof Error ? error.message : String(error)));
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          this.log('Invoke handler error: ' + errorMsg);
+          // Send error result back
+          await this.send('node.invoke.result', {
+            id: payload.id,
+            nodeId: this.deviceId,
+            ok: false,
+            error: {
+              code: 'INVOKE_ERROR',
+              message: errorMsg,
+            },
+          });
         }
+      } else {
+        // No handler - send error
+        await this.send('node.invoke.result', {
+          id: payload.id,
+          nodeId: this.deviceId,
+          ok: false,
+          error: {
+            code: 'NO_HANDLER',
+            message: 'No invoke handler registered',
+          },
+        });
       }
     }
   }
@@ -305,25 +368,55 @@ export class GatewayService {
         }
         pending.resolve(response.payload);
       } else {
+        // Check for NOT_PAIRED error - need to request pairing
+        const errorCode = response.error?.code;
+        if (errorCode === 'NOT_PAIRED' || errorCode?.startsWith('NOT_PAI')) {
+          this.log('Not paired - requesting pairing approval...');
+          this.requestPairing();
+        }
         pending.reject(new Error(response.error?.message || 'Request failed'));
       }
     }
   }
 
-  private async handleRequest(request: GatewayRequest): Promise<void> {
-    // Gateway sending a request to us (node.invoke)
-    if (request.method === 'node.invoke' && this.invokeHandler) {
-      const params = request.params as NodeInvokeParams;
-      try {
-        const result = await this.invokeHandler(params.command, params.params);
-        this.sendResponse(request.id, true, result);
-      } catch (error) {
-        this.sendResponse(request.id, false, undefined, {
-          code: 'INVOKE_ERROR',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
+  private async sendPairingRequest(): Promise<void> {
+    try {
+      // Build and sign a proper pairing request
+      const signedAt = Date.now();
+      const signature = this.signChallenge(this.challengeNonce, signedAt);
+      
+      const pairRequest = {
+        nodeId: this.deviceId,
+        publicKey: this.base64ToBase64Url(this.publicKey),
+        signature,
+        signedAt,
+        name: `Ronni's iPhone`,
+        platform: Platform.OS,
+        capabilities: this.capabilities,
+        commands: this.commands,
+        permissions: this.permissions,
+      };
+      
+      this.log('Sending node.pair.request with signature...');
+      await this.send('node.pair.request', pairRequest);
+      this.log('✅ Pairing request sent! Waiting for approval...');
+      this.log('💡 On host, run: openclaw nodes pending');
+    } catch (error) {
+      this.log('Failed to send pairing request: ' + (error instanceof Error ? error.message : String(error)));
+      // Will retry on next connect attempt
+      this.setState('disconnected');
     }
+  }
+
+  private async requestPairing(): Promise<void> {
+    this.setState('pairing');
+    await this.sendPairingRequest();
+  }
+
+  private async handleRequest(request: GatewayRequest): Promise<void> {
+    // Gateway uses EVENTS (node.invoke.request) for commands to nodes, not requests.
+    // This handler is for any other request types the gateway might send.
+    this.log(`Unhandled request method: ${request.method}`);
   }
 
   private handleHelloOk(payload: HelloOkPayload): void {
@@ -375,8 +468,10 @@ export class GatewayService {
       commands: this.commands,
       permissions: this.permissions,
       auth: {
-        // Gateway token for server-level auth, device token for returning devices
-        token: this.gatewayToken || this.deviceToken || undefined,
+        // Only send deviceToken for node connections
+        // gatewayToken is for operator auth, not node auth
+        // If we don't have deviceToken, we're a new node requesting pairing
+        token: this.deviceToken || undefined,
       },
       locale: 'en-US',
       userAgent: `aria-node/${APP_VERSION}`,
@@ -431,14 +526,15 @@ export class GatewayService {
   }
 
   private startTicking(): void {
+    // NOTE: Nodes do NOT send tick requests.
+    // The gateway broadcasts tick events TO nodes.
+    // We just need to stay connected - the WebSocket itself is the keepalive.
+    // tickIntervalMs from hello-ok is how often we'll RECEIVE ticks, not send them.
     if (this.tickTimer) {
       clearInterval(this.tickTimer);
+      this.tickTimer = null;
     }
-    this.tickTimer = setInterval(() => {
-      if (this.state === 'connected') {
-        this.send('tick', {});
-      }
-    }, this.tickIntervalMs);
+    this.log('Connected - listening for gateway tick events (no client-side tick needed)');
   }
 
   async send(method: string, params: Record<string, unknown>): Promise<unknown> {
