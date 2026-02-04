@@ -16,7 +16,7 @@ import {
 } from '../types/protocol';
 
 const PROTOCOL_VERSION = 3;
-const APP_VERSION = '0.2.1';
+const APP_VERSION = '0.2.2';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 type MessageHandler = (message: GatewayMessage) => void;
@@ -76,11 +76,17 @@ export class GatewayService {
     this.publicKey = storedPublicKey;
     this.secretKey = decodeBase64(storedSecretKey);
 
-    // Device ID is derived from public key (SHA256 of it)
-    this.deviceId = await Crypto.digestStringAsync(
+    // Device ID is derived from RAW public key bytes (SHA256 hex)
+    // OpenClaw hashes the raw 32-byte public key, not the base64 string
+    const publicKeyBytes = decodeBase64(storedPublicKey);
+    const hashBuffer = await Crypto.digest(
       Crypto.CryptoDigestAlgorithm.SHA256,
-      storedPublicKey
+      publicKeyBytes.buffer
     );
+    // Convert to hex string
+    this.deviceId = Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
 
     // Retrieve stored device token if any
     this.deviceToken = await SecureStore.getItemAsync('deviceToken');
@@ -126,11 +132,14 @@ export class GatewayService {
     this.publicKey = newPublicKey;
     this.secretKey = keyPair.secretKey;
     
-    // Device ID is derived from public key
-    this.deviceId = await Crypto.digestStringAsync(
+    // Device ID is derived from RAW public key bytes (SHA256 hex)
+    const hashBuffer = await Crypto.digest(
       Crypto.CryptoDigestAlgorithm.SHA256,
-      newPublicKey
+      keyPair.publicKey.buffer
     );
+    this.deviceId = Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
     
     this.log('Pairing reset, new device ID: ' + this.deviceId.substring(0, 16) + '...');
   }

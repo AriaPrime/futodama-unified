@@ -18,7 +18,7 @@ import { cameraService } from './src/services/camera';
 import { commandHandler, CameraCaptureCallback } from './src/services/commands';
 import { CameraSnapParams } from './src/types/protocol';
 
-const APP_VERSION = '0.2.1';
+const APP_VERSION = '0.2.2';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 
