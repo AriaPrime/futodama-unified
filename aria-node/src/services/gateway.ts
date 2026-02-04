@@ -16,11 +16,12 @@ import {
 } from '../types/protocol';
 
 const PROTOCOL_VERSION = 3;
-const APP_VERSION = '0.1.7';
+const APP_VERSION = '0.1.8';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 type MessageHandler = (message: GatewayMessage) => void;
 type StateChangeHandler = (state: ConnectionState) => void;
+type LogHandler = (message: string) => void;
 type InvokeHandler = (command: string, params: Record<string, unknown>) => Promise<unknown>;
 
 interface PendingRequest {
@@ -42,6 +43,7 @@ export class GatewayService {
   private pendingRequests: Map<string, PendingRequest> = new Map();
   private messageHandlers: Set<MessageHandler> = new Set();
   private stateChangeHandlers: Set<StateChangeHandler> = new Set();
+  private logHandlers: Set<LogHandler> = new Set();
   private invokeHandler: InvokeHandler | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
@@ -68,7 +70,7 @@ export class GatewayService {
       storedSecretKey = encodeBase64(keyPair.secretKey);
       await SecureStore.setItemAsync('publicKey', storedPublicKey);
       await SecureStore.setItemAsync('secretKey', storedSecretKey);
-      console.log('[Gateway] Generated new Ed25519 keypair');
+      this.log('Generated new Ed25519 keypair');
     }
 
     this.publicKey = storedPublicKey;
@@ -91,7 +93,7 @@ export class GatewayService {
     if (storedPort) this.port = parseInt(storedPort, 10);
     if (storedGatewayToken) this.gatewayToken = storedGatewayToken;
 
-    console.log('[Gateway] Initialized with deviceId:', this.deviceId.substring(0, 16) + '...');
+    this.log('Initialized with deviceId: ' + this.deviceId.substring(0, 16) + '...');
   }
 
   setGateway(host: string, port: number = 18789, token: string = ''): void {
@@ -130,7 +132,7 @@ export class GatewayService {
       newPublicKey
     );
     
-    console.log('[Gateway] Pairing reset, new device ID:', this.deviceId.substring(0, 16) + '...');
+    this.log('Pairing reset, new device ID: ' + this.deviceId.substring(0, 16) + '...');
   }
 
   getGatewayToken(): string {
@@ -149,6 +151,16 @@ export class GatewayService {
   onStateChange(handler: StateChangeHandler): () => void {
     this.stateChangeHandlers.add(handler);
     return () => this.stateChangeHandlers.delete(handler);
+  }
+
+  onLog(handler: LogHandler): () => void {
+    this.logHandlers.add(handler);
+    return () => this.logHandlers.delete(handler);
+  }
+
+  private log(message: string): void {
+    console.log(`[Gateway] ${message}`);
+    this.logHandlers.forEach((handler) => handler(message));
   }
 
   getState(): ConnectionState {
@@ -170,31 +182,31 @@ export class GatewayService {
       ? `ws://${this.host}:${this.port}?token=${encodeURIComponent(this.gatewayToken)}`
       : `ws://${this.host}:${this.port}`;
     
-    console.log('[Gateway] Connecting to:', url.replace(/token=[^&]+/, 'token=***'));
+    this.log('Connecting to: ' + url.replace(/token=[^&]+/, 'token=***'));
     
     try {
       this.ws = new WebSocket(url);
       
       this.ws.onopen = () => {
-        console.log('[Gateway] WebSocket connected to', url.replace(/token=[^&]+/, 'token=***'));
-        console.log('[Gateway] Waiting for connect.challenge event...');
+        this.log('WebSocket OPEN - connected!');
+        this.log('Waiting for connect.challenge event...');
       };
 
       this.ws.onmessage = (event) => {
-        console.log('[Gateway] Raw message received:', typeof event.data, event.data?.substring?.(0, 100));
+        this.log('Message received: ' + (typeof event.data === 'string' ? event.data.substring(0, 80) : typeof event.data));
         this.handleMessage(event.data);
       };
 
       this.ws.onerror = (error: any) => {
-        console.error('[Gateway] WebSocket error:', error?.message || error?.type || JSON.stringify(error));
+        this.log('WebSocket ERROR: ' + (error?.message || error?.type || 'unknown'));
       };
 
       this.ws.onclose = (event) => {
-        console.log('[Gateway] WebSocket closed - code:', event.code, 'reason:', event.reason || '(none)', 'wasClean:', event.wasClean);
+        this.log('WebSocket CLOSED - code: ' + event.code + ', reason: ' + (event.reason || 'none') + ', clean: ' + event.wasClean);
         this.handleDisconnect();
       };
     } catch (error) {
-      console.error('[Gateway] Connection failed:', error);
+      this.log('Connection FAILED: ' + (error instanceof Error ? error.message : String(error)));
       this.handleDisconnect();
     }
   }
@@ -235,17 +247,17 @@ export class GatewayService {
         this.handleRequest(message as GatewayRequest);
       }
     } catch (error) {
-      console.error('[Gateway] Failed to parse message:', error);
+      this.log('Failed to parse message: ' + (error instanceof Error ? error.message : String(error)));
     }
   }
 
   private async handleEvent(event: GatewayEvent): Promise<void> {
-    console.log('[Gateway] Received event:', event.event);
+    this.log('Received event: ' + event.event);
     if (event.event === 'connect.challenge') {
       // Received challenge, now send connect request
       this.challengeNonce = (event.payload as { nonce: string }).nonce;
-      console.log('[Gateway] Got challenge nonce, sending connect...');
-      console.log('[Gateway] Using gatewayToken:', this.gatewayToken ? 'SET (' + this.gatewayToken.substring(0, 8) + '...)' : 'NOT SET');
+      this.log('Got challenge nonce, sending connect...');
+      this.log('Using gatewayToken: ' + (this.gatewayToken ? 'SET (' + this.gatewayToken.substring(0, 8) + '...)' : 'NOT SET'));
       await this.sendConnect();
     } else if (event.event === 'node.invoke') {
       // Handle node invoke from gateway
@@ -256,7 +268,7 @@ export class GatewayService {
           // Send response back
           // Note: node.invoke uses events, not req/res - check protocol
         } catch (error) {
-          console.error('[Gateway] Invoke handler error:', error);
+          this.log('Invoke handler error: ' + (error instanceof Error ? error.message : String(error)));
         }
       }
     }
@@ -298,7 +310,7 @@ export class GatewayService {
   }
 
   private handleHelloOk(payload: HelloOkPayload): void {
-    console.log('[Gateway] Connected successfully, protocol:', payload.protocol);
+    this.log('Connected successfully! Protocol: ' + payload.protocol);
     
     if (payload.auth?.deviceToken) {
       this.deviceToken = payload.auth.deviceToken;
@@ -360,7 +372,7 @@ export class GatewayService {
       },
     };
 
-    console.log('[Gateway] Sending connect with publicKey:', this.publicKey.substring(0, 20) + '...');
+    this.log('Sending connect request (publicKey: ' + this.publicKey.substring(0, 12) + '...)');
     await this.send('connect', connectParams);
   }
 

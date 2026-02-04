@@ -18,7 +18,7 @@ import { cameraService } from './src/services/camera';
 import { commandHandler, CameraCaptureCallback } from './src/services/commands';
 import { CameraSnapParams } from './src/types/protocol';
 
-const APP_VERSION = '0.1.7';
+const APP_VERSION = '0.1.8';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 
@@ -59,6 +59,10 @@ export default function App() {
       gateway.onStateChange((state) => {
         setConnectionState(state);
         addLog(`Connection state: ${state}`);
+      });
+
+      gateway.onLog((message) => {
+        addLog(`[GW] ${message}`);
       });
 
       gateway.onMessage((message) => {
