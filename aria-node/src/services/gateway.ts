@@ -497,6 +497,9 @@ export class GatewayService {
   private buildAuthPayload(nonce: string, signedAt: number): string {
     // OpenClaw v2 payload format:
     // v2|{deviceId}|{clientId}|{clientMode}|{role}|{scopes}|{signedAtMs}|{token}|{nonce}
+    // IMPORTANT: token must match what we send in connect auth!
+    // For node role without deviceToken, token should be empty string
+    const authToken = this.deviceToken || '';  // ONLY use deviceToken, not gatewayToken
     const parts = [
       'v2',
       this.deviceId,
@@ -505,7 +508,7 @@ export class GatewayService {
       'node',              // role
       '',                  // scopes (empty for node)
       String(signedAt),
-      this.gatewayToken || this.deviceToken || '',  // token
+      authToken,           // Must match connect auth.token
       nonce,
     ];
     return parts.join('|');
