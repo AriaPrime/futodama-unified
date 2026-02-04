@@ -18,7 +18,7 @@ import { cameraService } from './src/services/camera';
 import { commandHandler, CameraCaptureCallback } from './src/services/commands';
 import { CameraSnapParams } from './src/types/protocol';
 
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.2.1';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 
@@ -55,6 +55,13 @@ export default function App() {
         addLog('Initializing gateway...');
         await gateway.initialize();
         addLog('Gateway initialized OK');
+
+        // Load saved settings into UI
+        const settings = gateway.getSettings();
+        if (settings.host) setHost(settings.host);
+        if (settings.port) setPort(settings.port.toString());
+        if (settings.token) setToken(settings.token);
+        addLog(`Loaded settings: ${settings.host || '(none)'}:${settings.port}`);
 
         // Set up gateway event handlers FIRST
         gateway.onStateChange((state) => {

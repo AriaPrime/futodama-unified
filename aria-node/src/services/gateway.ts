@@ -16,7 +16,7 @@ import {
 } from '../types/protocol';
 
 const PROTOCOL_VERSION = 3;
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.2.1';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 type MessageHandler = (message: GatewayMessage) => void;
@@ -137,6 +137,14 @@ export class GatewayService {
 
   getGatewayToken(): string {
     return this.gatewayToken;
+  }
+
+  getSettings(): { host: string; port: number; token: string } {
+    return {
+      host: this.host,
+      port: this.port,
+      token: this.gatewayToken,
+    };
   }
 
   setInvokeHandler(handler: InvokeHandler): void {
@@ -365,7 +373,7 @@ export class GatewayService {
       userAgent: `aria-node/${APP_VERSION}`,
       device: {
         id: this.deviceId,
-        publicKey: this.publicKey,
+        publicKey: this.base64ToBase64Url(this.publicKey),
         signature,
         signedAt,
         nonce: this.challengeNonce,
@@ -376,16 +384,41 @@ export class GatewayService {
     await this.send('connect', connectParams);
   }
 
+  private buildAuthPayload(nonce: string, signedAt: number): string {
+    // OpenClaw v2 payload format:
+    // v2|{deviceId}|{clientId}|{clientMode}|{role}|{scopes}|{signedAtMs}|{token}|{nonce}
+    const parts = [
+      'v2',
+      this.deviceId,
+      'openclaw-ios',      // clientId
+      'node',              // clientMode
+      'node',              // role
+      '',                  // scopes (empty for node)
+      String(signedAt),
+      this.gatewayToken || this.deviceToken || '',  // token
+      nonce,
+    ];
+    return parts.join('|');
+  }
+
   private signChallenge(nonce: string, signedAt: number): string {
     if (!this.secretKey) {
       throw new Error('Secret key not initialized');
     }
     
-    // Sign the challenge message: deviceId + nonce + signedAt
-    const message = `${this.deviceId}:${nonce}:${signedAt}`;
-    const messageBytes = new TextEncoder().encode(message);
+    // Build the payload in OpenClaw's expected format
+    const payload = this.buildAuthPayload(nonce, signedAt);
+    this.log('Signing payload: ' + payload.substring(0, 50) + '...');
+    
+    const messageBytes = new TextEncoder().encode(payload);
     const signatureBytes = nacl.sign.detached(messageBytes, this.secretKey);
-    return encodeBase64(signatureBytes);
+    
+    // Return as base64url (not regular base64)
+    return this.base64ToBase64Url(encodeBase64(signatureBytes));
+  }
+
+  private base64ToBase64Url(base64: string): string {
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
   private startTicking(): void {
