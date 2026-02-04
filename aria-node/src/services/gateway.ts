@@ -276,11 +276,17 @@ export class GatewayService {
       this.log('Got challenge nonce, sending connect...');
       this.log('Using deviceToken: ' + (this.deviceToken ? 'SET (' + this.deviceToken.substring(0, 8) + '...)' : 'NOT SET (new device)'));
       
-      // If we don't have a deviceToken, we're a new node - send pairing request immediately
-      // Don't wait for NOT_PAIRED error because connection might close too fast
+      // Gateway requires `connect` as first request
+      // If we don't have a device token, we need to pair - send both connect and pair request
+      // in rapid succession before gateway closes connection
       if (!this.deviceToken) {
-        this.log('New device - sending pairing request proactively...');
+        this.log('New device - sending connect + pairing request together...');
         this.setState('pairing');
+        // Send connect first (required), then immediately send pairing request
+        // Don't await connect - send both quickly
+        this.sendConnect().catch(() => {}); // Ignore connect error, we expect NOT_PAIRED
+        // Small delay to ensure connect is sent first
+        await new Promise(resolve => setTimeout(resolve, 50));
         await this.sendPairingRequest();
       } else {
         await this.sendConnect();
