@@ -16,7 +16,7 @@ import {
 } from '../types/protocol';
 
 const PROTOCOL_VERSION = 3;
-const APP_VERSION = '0.1.4';
+const APP_VERSION = '0.1.5';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 type MessageHandler = (message: GatewayMessage) => void;
@@ -341,9 +341,8 @@ export class GatewayService {
       commands: this.commands,
       permissions: this.permissions,
       auth: {
-        // Only send device token for device-specific authentication
-        // Gateway token is not used in auth object - it's for server-level validation
-        token: this.deviceToken || undefined,
+        // Gateway token for server-level auth, device token for returning devices
+        token: this.gatewayToken || this.deviceToken || undefined,
       },
       locale: 'en-US',
       userAgent: `aria-node/${APP_VERSION}`,
