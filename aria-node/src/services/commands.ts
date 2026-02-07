@@ -2,6 +2,8 @@
 
 import { cameraService } from './camera';
 import { locationService } from './location';
+import { audioService, PlayAudioParams } from './audio';
+import { micService, RecordParams } from './mic';
 import { CameraSnapParams, LocationGetParams } from '../types/protocol';
 
 export type CameraCaptureCallback = (
@@ -9,11 +11,26 @@ export type CameraCaptureCallback = (
   params: CameraSnapParams
 ) => Promise<{ base64: string; width: number; height: number }>;
 
+export interface ScreenDisplayParams {
+  title?: string;
+  subtitle?: string;
+  imageUrl?: string;
+  duration?: string;
+  isPlaying?: boolean;
+}
+
+export type ScreenDisplayCallback = (data: ScreenDisplayParams | null) => void;
+
 class CommandHandler {
   private cameraCaptureCallback: CameraCaptureCallback | null = null;
+  private screenDisplayCallback: ScreenDisplayCallback | null = null;
 
   setCameraCaptureCallback(callback: CameraCaptureCallback): void {
     this.cameraCaptureCallback = callback;
+  }
+
+  setScreenDisplayCallback(callback: ScreenDisplayCallback): void {
+    this.screenDisplayCallback = callback;
   }
 
   async handle(command: string, params: Record<string, unknown>): Promise<unknown> {
@@ -29,9 +46,74 @@ class CommandHandler {
       case 'location.get':
         return this.handleLocationGet(params as LocationGetParams);
 
+      case 'audio.play':
+        return this.handleAudioPlay(params as PlayAudioParams);
+
+      case 'audio.stop':
+        return this.handleAudioStop();
+
+      case 'mic.record':
+        return this.handleMicRecord(params as RecordParams);
+
+      case 'mic.stop':
+        return this.handleMicStop();
+
+      case 'screen.display':
+        return this.handleScreenDisplay(params as ScreenDisplayParams);
+
+      case 'screen.clear':
+        return this.handleScreenClear();
+
       default:
         throw new Error(`Unknown command: ${command}`);
     }
+  }
+
+  private async handleAudioPlay(params: PlayAudioParams): Promise<unknown> {
+    // If screen display callback is set, also update now playing
+    if (this.screenDisplayCallback && (params as any).title) {
+      this.screenDisplayCallback({
+        title: (params as any).title,
+        subtitle: (params as any).subtitle || (params as any).channel,
+        imageUrl: (params as any).imageUrl || (params as any).thumbnailUrl,
+        isPlaying: true,
+      });
+    }
+    const result = await audioService.play(params);
+    return result;
+  }
+
+  private async handleAudioStop(): Promise<unknown> {
+    await audioService.stop();
+    // Clear now playing
+    if (this.screenDisplayCallback) {
+      this.screenDisplayCallback(null);
+    }
+    return { stopped: true };
+  }
+
+  private async handleMicRecord(params: RecordParams): Promise<unknown> {
+    const result = await micService.record(params);
+    return result;
+  }
+
+  private async handleMicStop(): Promise<unknown> {
+    const result = await micService.stop();
+    return result || { stopped: true };
+  }
+
+  private async handleScreenDisplay(params: ScreenDisplayParams): Promise<unknown> {
+    if (this.screenDisplayCallback) {
+      this.screenDisplayCallback(params);
+    }
+    return { displayed: true };
+  }
+
+  private async handleScreenClear(): Promise<unknown> {
+    if (this.screenDisplayCallback) {
+      this.screenDisplayCallback(null);
+    }
+    return { cleared: true };
   }
 
   private async handleCameraList(): Promise<unknown> {

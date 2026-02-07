@@ -2,7 +2,7 @@
   "expo": {
     "name": "Aria Node",
     "slug": "aria-node",
-    "version": "0.2.9",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a1a2e"
+      "backgroundColor": "#0a0a14"
     },
     "ios": {
       "supportsTablet": true,
@@ -21,16 +21,15 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Aria Node needs background location access to share your position even when the app is in the background.",
         "NSLocationAlwaysUsageDescription": "Aria Node needs background location access to share your position even when the app is in the background.",
         "UIBackgroundModes": [
-          "location",
-          "fetch",
-          "location",
-          "fetch",
-          "location",
-          "fetch",
+          "audio",
           "location",
           "fetch"
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        }
       }
     },
     "android": {
