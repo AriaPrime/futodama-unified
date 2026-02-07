@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Image, StyleSheet, Animated, TouchableOpacity, Dimensions } from 'react-native';
 import { colors, spacing, fontSize, borderRadius, glow } from '../theme';
+import { AudioState } from '../services/audio';
 
 export interface NowPlayingData {
   title: string;
@@ -14,11 +15,14 @@ interface NowPlayingCardProps {
   data: NowPlayingData | null;
   onPress?: () => void;
   expanded?: boolean;
+  audioState?: AudioState;
+  onPlayPause?: () => void;
+  onStop?: () => void;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export function NowPlayingCard({ data, onPress, expanded = false }: NowPlayingCardProps) {
+export function NowPlayingCard({ data, onPress, expanded = false, audioState, onPlayPause, onStop }: NowPlayingCardProps) {
   const glowAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -62,11 +66,39 @@ export function NowPlayingCard({ data, onPress, expanded = false }: NowPlayingCa
               {data.subtitle}
             </Text>
           )}
-          {data.isPlaying && (
+          {(audioState === 'playing' || data.isPlaying) && (
             <Animated.View style={[styles.playingIndicator, { opacity: glowAnim }]}>
               <Text style={styles.playingBars}>▮▯▮▯▮▮▯▮</Text>
-              <Text style={styles.playingText}>NOW PLAYING</Text>
+              <Text style={styles.playingText}>
+                {audioState === 'paused' ? 'PAUSED' : 'NOW PLAYING'}
+              </Text>
             </Animated.View>
+          )}
+
+          {/* Playback Controls */}
+          {(audioState === 'playing' || audioState === 'paused') && (
+            <View style={styles.controlsRow}>
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={onPlayPause}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.controlIcon}>
+                  {audioState === 'playing' ? '⏸' : '▶️'}
+                </Text>
+                <Text style={styles.controlLabel}>
+                  {audioState === 'playing' ? 'Pause' : 'Play'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.controlButton}
+                onPress={onStop}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.controlIcon}>⏹</Text>
+                <Text style={styles.controlLabel}>Stop</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       </View>
@@ -157,6 +189,39 @@ const styles = StyleSheet.create({
     color: colors.cyan,
     fontWeight: '700',
     letterSpacing: 3,
+    fontFamily: 'monospace',
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.xl,
+    marginTop: spacing.xl,
+  },
+  controlButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.cyan,
+    shadowColor: colors.cyan,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  controlIcon: {
+    fontSize: 28,
+  },
+  controlLabel: {
+    fontSize: fontSize.xs,
+    color: colors.cyan,
+    fontWeight: '600',
+    marginTop: 4,
+    letterSpacing: 1,
     fontFamily: 'monospace',
   },
 

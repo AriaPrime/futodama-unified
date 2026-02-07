@@ -20,6 +20,7 @@ import { locationService } from './src/services/location';
 import { cameraService } from './src/services/camera';
 import { micService } from './src/services/mic';
 import { commandHandler, CameraCaptureCallback, ScreenDisplayCallback } from './src/services/commands';
+import { audioService, AudioState } from './src/services/audio';
 import { backgroundService } from './src/services/background';
 import { meetingService, MeetingState } from './src/services/meeting';
 import { CameraSnapParams } from './src/types/protocol';
@@ -66,6 +67,7 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [backgroundActive, setBackgroundActive] = useState(false);
   const [nowPlaying, setNowPlaying] = useState<NowPlayingData | null>(null);
+  const [audioState, setAudioState] = useState<AudioState>('idle');
   const [meetingState, setMeetingState] = useState<MeetingState>({
     isRecording: false, startedAt: null, elapsedMs: 0,
     chunksSent: 0, chunksTotal: 0, status: 'idle',
@@ -122,6 +124,13 @@ export default function App() {
             addLog(`🎵 Display: ${data.title || 'unknown'}`);
           } else {
             setNowPlaying(null);
+          }
+        });
+
+        audioService.onStateChange((state) => {
+          setAudioState(state);
+          if (state === 'idle') {
+            setNowPlaying((prev) => prev ? { ...prev, isPlaying: false } : null);
           }
         });
 
@@ -291,6 +300,7 @@ export default function App() {
       {nowPlaying && (
         <NowPlayingCard
           data={nowPlaying}
+          audioState={audioState}
           onPress={() => setCurrentScreen('nowplaying')}
         />
       )}
@@ -503,7 +513,16 @@ export default function App() {
 
       <View style={[common.centered, { flex: 1, paddingBottom: spacing.xxl }]}>
         {nowPlaying ? (
-          <NowPlayingCard data={nowPlaying} expanded />
+          <NowPlayingCard
+            data={nowPlaying}
+            expanded
+            audioState={audioState}
+            onPlayPause={() => audioService.togglePlayPause()}
+            onStop={async () => {
+              await audioService.stop();
+              setNowPlaying(null);
+            }}
+          />
         ) : (
           <View style={common.centered}>
             <Text style={{ fontSize: 48, marginBottom: spacing.md }}>🎵</Text>

@@ -16,7 +16,7 @@ import {
 } from '../types/protocol';
 
 const PROTOCOL_VERSION = 3;
-const APP_VERSION = '0.2.5';
+const APP_VERSION = '0.4.0';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
 type MessageHandler = (message: GatewayMessage) => void;
@@ -30,12 +30,47 @@ interface PendingRequest {
   timeout: ReturnType<typeof setTimeout>;
 }
 
+// Global state that survives Metro hot-reload
+// The module gets re-evaluated but `global` persists
+interface GlobalGatewayState {
+  ws: WebSocket | null;
+  state: ConnectionState;
+  connectedAt: number | null;
+}
+
+declare global {
+  var __ariaGatewayState: GlobalGatewayState | undefined;
+}
+
+// Initialize global state if not present
+if (!global.__ariaGatewayState) {
+  global.__ariaGatewayState = {
+    ws: null,
+    state: 'disconnected',
+    connectedAt: null,
+  };
+}
+
 export class GatewayService {
-  private ws: WebSocket | null = null;
+  // Use global for WebSocket to survive hot-reload
+  private get ws(): WebSocket | null {
+    return global.__ariaGatewayState!.ws;
+  }
+  private set ws(value: WebSocket | null) {
+    global.__ariaGatewayState!.ws = value;
+  }
+  
+  // Use global for state to survive hot-reload
+  private get state(): ConnectionState {
+    return global.__ariaGatewayState!.state;
+  }
+  private set state(value: ConnectionState) {
+    global.__ariaGatewayState!.state = value;
+  }
+  
   private host: string = '';
   private port: number = 18789;
   private gatewayToken: string = '';
-  private state: ConnectionState = 'disconnected';
   private deviceId: string = '';
   private publicKey: string = '';
   private secretKey: Uint8Array | null = null;
@@ -51,26 +86,62 @@ export class GatewayService {
   private challengeNonce: string = '';
 
   // Capabilities this node exposes
-  private capabilities = ['camera', 'location'];
-  private commands = ['camera.snap', 'camera.list', 'location.get'];
+  private capabilities = ['camera', 'location', 'audio', 'microphone'];
+  private commands = ['camera.snap', 'camera.list', 'location.get', 'audio.play', 'audio.stop', 'mic.record', 'mic.stop', 'screen.display', 'screen.clear'];
   private permissions: Record<string, boolean> = {
     'camera.capture': true,
     'location.get': true,
+    'audio.play': true,
+    'mic.record': true,
   };
 
   async initialize(): Promise<void> {
     // Generate or retrieve Ed25519 keypair
-    let storedPublicKey = await SecureStore.getItemAsync('publicKey');
-    let storedSecretKey = await SecureStore.getItemAsync('secretKey');
+    // Use global cache to survive Metro hot-reloads (SecureStore can be flaky in Expo Go)
+    let storedPublicKey: string | null = null;
+    let storedSecretKey: string | null = null;
+    
+    // Check global cache first (survives hot-reload)
+    if (global.__ariaGatewayState && (global.__ariaGatewayState as any).__publicKey) {
+      storedPublicKey = (global.__ariaGatewayState as any).__publicKey;
+      storedSecretKey = (global.__ariaGatewayState as any).__secretKey;
+      this.log('Using cached keypair from global state');
+    } else {
+      // Try SecureStore
+      try {
+        storedPublicKey = await SecureStore.getItemAsync('publicKey');
+        storedSecretKey = await SecureStore.getItemAsync('secretKey');
+        if (storedPublicKey && storedSecretKey) {
+          this.log('Loaded keypair from SecureStore');
+          // Cache in global
+          (global.__ariaGatewayState as any).__publicKey = storedPublicKey;
+          (global.__ariaGatewayState as any).__secretKey = storedSecretKey;
+        } else {
+          this.log('SecureStore returned null for keypair');
+        }
+      } catch (error) {
+        this.log('SecureStore error: ' + (error instanceof Error ? error.message : String(error)));
+      }
+    }
 
     if (!storedPublicKey || !storedSecretKey) {
       // Generate new Ed25519 keypair
       const keyPair = nacl.sign.keyPair();
       storedPublicKey = encodeBase64(keyPair.publicKey);
       storedSecretKey = encodeBase64(keyPair.secretKey);
-      await SecureStore.setItemAsync('publicKey', storedPublicKey);
-      await SecureStore.setItemAsync('secretKey', storedSecretKey);
-      this.log('Generated new Ed25519 keypair');
+      
+      // Save to both global and SecureStore
+      (global.__ariaGatewayState as any).__publicKey = storedPublicKey;
+      (global.__ariaGatewayState as any).__secretKey = storedSecretKey;
+      
+      try {
+        await SecureStore.setItemAsync('publicKey', storedPublicKey);
+        await SecureStore.setItemAsync('secretKey', storedSecretKey);
+        this.log('Generated and saved new Ed25519 keypair');
+      } catch (error) {
+        this.log('Failed to save to SecureStore: ' + (error instanceof Error ? error.message : String(error)));
+        this.log('Keypair cached in memory only (will be lost on full app restart)');
+      }
     }
 
     this.publicKey = storedPublicKey;
@@ -88,16 +159,31 @@ export class GatewayService {
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
 
+    // Cache device ID too
+    (global.__ariaGatewayState as any).__deviceId = this.deviceId;
+
     // Retrieve stored device token if any
-    this.deviceToken = await SecureStore.getItemAsync('deviceToken');
+    try {
+      this.deviceToken = await SecureStore.getItemAsync('deviceToken');
+      if (this.deviceToken) {
+        (global.__ariaGatewayState as any).__deviceToken = this.deviceToken;
+      }
+    } catch (error) {
+      // Check global cache
+      this.deviceToken = (global.__ariaGatewayState as any).__deviceToken || null;
+    }
 
     // Retrieve stored gateway config
-    const storedHost = await SecureStore.getItemAsync('gatewayHost');
-    const storedPort = await SecureStore.getItemAsync('gatewayPort');
-    const storedGatewayToken = await SecureStore.getItemAsync('gatewayToken');
-    if (storedHost) this.host = storedHost;
-    if (storedPort) this.port = parseInt(storedPort, 10);
-    if (storedGatewayToken) this.gatewayToken = storedGatewayToken;
+    try {
+      const storedHost = await SecureStore.getItemAsync('gatewayHost');
+      const storedPort = await SecureStore.getItemAsync('gatewayPort');
+      const storedGatewayToken = await SecureStore.getItemAsync('gatewayToken');
+      if (storedHost) this.host = storedHost;
+      if (storedPort) this.port = parseInt(storedPort, 10);
+      if (storedGatewayToken) this.gatewayToken = storedGatewayToken;
+    } catch (error) {
+      this.log('Failed to load gateway config from SecureStore');
+    }
 
     this.log('Initialized with deviceId: ' + this.deviceId.substring(0, 16) + '...');
   }
@@ -118,16 +204,38 @@ export class GatewayService {
   async resetPairing(): Promise<void> {
     // Clear all stored pairing data
     this.deviceToken = null;
-    await SecureStore.deleteItemAsync('deviceToken');
-    await SecureStore.deleteItemAsync('publicKey');
-    await SecureStore.deleteItemAsync('secretKey');
+    
+    // Clear global cache
+    if (global.__ariaGatewayState) {
+      (global.__ariaGatewayState as any).__publicKey = null;
+      (global.__ariaGatewayState as any).__secretKey = null;
+      (global.__ariaGatewayState as any).__deviceId = null;
+      (global.__ariaGatewayState as any).__deviceToken = null;
+    }
+    
+    try {
+      await SecureStore.deleteItemAsync('deviceToken');
+      await SecureStore.deleteItemAsync('publicKey');
+      await SecureStore.deleteItemAsync('secretKey');
+    } catch (error) {
+      this.log('Failed to clear SecureStore: ' + (error instanceof Error ? error.message : String(error)));
+    }
     
     // Generate new Ed25519 keypair
     const keyPair = nacl.sign.keyPair();
     const newPublicKey = encodeBase64(keyPair.publicKey);
     const newSecretKey = encodeBase64(keyPair.secretKey);
-    await SecureStore.setItemAsync('publicKey', newPublicKey);
-    await SecureStore.setItemAsync('secretKey', newSecretKey);
+    
+    // Save to both global cache and SecureStore
+    (global.__ariaGatewayState as any).__publicKey = newPublicKey;
+    (global.__ariaGatewayState as any).__secretKey = newSecretKey;
+    
+    try {
+      await SecureStore.setItemAsync('publicKey', newPublicKey);
+      await SecureStore.setItemAsync('secretKey', newSecretKey);
+    } catch (error) {
+      this.log('Failed to save new keypair to SecureStore: ' + (error instanceof Error ? error.message : String(error)));
+    }
     
     this.publicKey = newPublicKey;
     this.secretKey = keyPair.secretKey;
@@ -140,6 +248,9 @@ export class GatewayService {
     this.deviceId = Array.from(new Uint8Array(hashBuffer))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
+    
+    // Cache new device ID
+    (global.__ariaGatewayState as any).__deviceId = this.deviceId;
     
     this.log('Pairing reset, new device ID: ' + this.deviceId.substring(0, 16) + '...');
   }
@@ -181,6 +292,17 @@ export class GatewayService {
   }
 
   getState(): ConnectionState {
+    // Double-check: if WebSocket is open, state should be connected
+    // (Belt + suspenders with the global state approach)
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      if (this.state === 'disconnected') {
+        this.state = 'connected';
+      }
+    } else if (this.ws === null || this.ws.readyState === WebSocket.CLOSED) {
+      if (this.state === 'connected') {
+        this.state = 'disconnected';
+      }
+    }
     return this.state;
   }
 
@@ -276,20 +398,23 @@ export class GatewayService {
       this.log('Got challenge nonce, sending connect...');
       this.log('Using deviceToken: ' + (this.deviceToken ? 'SET (' + this.deviceToken.substring(0, 8) + '...)' : 'NOT SET (new device)'));
       
-      // Gateway requires `connect` as first request
-      // If we don't have a device token, we need to pair - send both connect and pair request
-      // in rapid succession before gateway closes connection
-      if (!this.deviceToken) {
-        this.log('New device - sending connect + pairing request together...');
-        this.setState('pairing');
-        // Send connect first (required), then immediately send pairing request
-        // Don't await connect - send both quickly
-        this.sendConnect().catch(() => {}); // Ignore connect error, we expect NOT_PAIRED
-        // Small delay to ensure connect is sent first
-        await new Promise(resolve => setTimeout(resolve, 50));
-        await this.sendPairingRequest();
-      } else {
+      // Always try connect first - if device was approved via CLI, connect will succeed
+      // even without a stored deviceToken. Only send pairing request if connect fails.
+      try {
         await this.sendConnect();
+        // If we get here, connect succeeded! We're paired.
+        // handleHelloOk will be called via handleResponse
+      } catch (error) {
+        // Connect failed - check if we need to pair
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        this.log('Connect failed: ' + errorMsg);
+        
+        // If not paired, send pairing request
+        if (errorMsg.includes('NOT_PAIRED') || errorMsg.includes('pairing')) {
+          this.log('Not paired - sending pairing request...');
+          this.setState('pairing');
+          await this.sendPairingRequest();
+        }
       }
     } else if (event.event === 'node.pair.resolved') {
       // Pairing request was approved or rejected
@@ -297,7 +422,14 @@ export class GatewayService {
       if (payload.status === 'approved' && payload.token) {
         this.log('🎉 Pairing APPROVED! Got device token.');
         this.deviceToken = payload.token;
-        await SecureStore.setItemAsync('deviceToken', payload.token);
+        // Cache in global state
+        (global.__ariaGatewayState as any).__deviceToken = payload.token;
+        // Try to persist to SecureStore
+        try {
+          await SecureStore.setItemAsync('deviceToken', payload.token);
+        } catch (error) {
+          this.log('Failed to persist deviceToken to SecureStore');
+        }
         // Reconnect with the new token
         this.disconnect();
         setTimeout(() => this.connect(), 1000);
@@ -430,7 +562,12 @@ export class GatewayService {
     
     if (payload.auth?.deviceToken) {
       this.deviceToken = payload.auth.deviceToken;
-      SecureStore.setItemAsync('deviceToken', payload.auth.deviceToken);
+      // Cache in global state
+      (global.__ariaGatewayState as any).__deviceToken = payload.auth.deviceToken;
+      // Try to persist to SecureStore
+      SecureStore.setItemAsync('deviceToken', payload.auth.deviceToken).catch(error => {
+        this.log('Failed to persist deviceToken to SecureStore');
+      });
     }
     
     this.tickIntervalMs = payload.policy.tickIntervalMs;
