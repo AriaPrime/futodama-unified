@@ -11,7 +11,6 @@ import {
   AppStateStatus,
   Dimensions,
   SafeAreaView,
-  Image,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -26,16 +25,26 @@ import { meetingService, MeetingState } from './src/services/meeting';
 import { CameraSnapParams } from './src/types/protocol';
 import { colors, spacing, fontSize, borderRadius, glow, common } from './src/theme';
 import { GlowButton } from './src/components/GlowButton';
-import { StatusIndicator } from './src/components/StatusIndicator';
+import { GlassCard } from './src/components/GlassCard';
+import { CircuitBackground } from './src/components/CircuitBackground';
+import { CoreOrb } from './src/components/CoreOrb';
 import { NowPlayingCard, NowPlayingData } from './src/components/NowPlayingCard';
 import { MeetingRecorder } from './src/components/MeetingRecorder';
 import { LogViewer } from './src/components/LogViewer';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type Screen = 'home' | 'settings' | 'nowplaying';
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'pairing';
+
+// Map connection state to background glow intensity
+const glowMap: Record<ConnectionState, number> = {
+  disconnected: 0.15,
+  connecting: 0.4,
+  pairing: 0.4,
+  connected: 0.7,
+};
 
 export default function App() {
   // Navigation
@@ -111,7 +120,6 @@ export default function App() {
           return await commandHandler.handle(command, params);
         });
 
-        // Screen display callback for Now Playing
         commandHandler.setScreenDisplayCallback((data) => {
           if (data) {
             setNowPlaying({
@@ -144,7 +152,7 @@ export default function App() {
           }
         });
 
-        addLog('⚡ Aria Node ready');
+        addLog('⚡ Aria Node v' + APP_VERSION + ' ready');
       } catch (error) {
         addLog('❌ INIT: ' + (error instanceof Error ? error.message : String(error)));
       }
@@ -281,233 +289,259 @@ export default function App() {
     }
   };
 
-  // ─── SCREENS ───
-
+  // ─── HOME SCREEN ───
   const renderHomeScreen = () => (
-    <ScrollView style={styles.screenScroll} contentContainerStyle={styles.screenContent}>
-      {/* Hero Header */}
-      <View style={styles.heroSection}>
-        <View style={styles.heroTop}>
-          <View>
-            <Text style={styles.heroTitle}>⚡ ARIA</Text>
-            <Text style={styles.heroSubtitle}>NODE v{APP_VERSION}</Text>
-          </View>
-          <StatusIndicator state={connectionState} compact />
+    <CircuitBackground glowIntensity={glowMap[connectionState]}>
+      <ScrollView
+        style={styles.screenScroll}
+        contentContainerStyle={styles.homeContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Central Core Orb */}
+        <View style={styles.orbSection}>
+          <CoreOrb state={connectionState} version={APP_VERSION} />
         </View>
-      </View>
 
-      {/* Now Playing Card (if active) */}
-      {nowPlaying && (
-        <NowPlayingCard
-          data={nowPlaying}
-          audioState={audioState}
-          onPress={() => setCurrentScreen('nowplaying')}
-        />
-      )}
+        {/* Now Playing Card (if active) */}
+        {nowPlaying && (
+          <View style={styles.cardSection}>
+            <GlassCard borderGlow={colors.cyan}>
+              <TouchableOpacity
+                onPress={() => setCurrentScreen('nowplaying')}
+                activeOpacity={0.8}
+              >
+                <NowPlayingCard
+                  data={nowPlaying}
+                  audioState={audioState}
+                  onPress={() => setCurrentScreen('nowplaying')}
+                />
+              </TouchableOpacity>
+            </GlassCard>
+          </View>
+        )}
 
-      {/* Main Action: Talk to Aria */}
-      <View style={styles.actionSection}>
-        <GlowButton
-          title={isRecording ? 'Stop & Send' : 'Talk to Aria'}
-          icon={isRecording ? '⏹️' : '🎤'}
-          color={isRecording ? colors.error : colors.cyan}
-          onPress={toggleRecording}
-          size="hero"
-          style={styles.heroButton}
-        />
-      </View>
-
-      {/* Quick Actions Grid */}
-      <View style={styles.gridSection}>
-        <View style={styles.gridRow}>
+        {/* Main Action: Talk to Aria */}
+        <View style={styles.actionSection}>
           <GlowButton
-            title="Meeting"
-            icon="📋"
-            color={meetingState.isRecording ? colors.error : colors.purple}
-            onPress={async () => {
-              if (meetingState.isRecording) {
-                await meetingService.stopRecording();
-              } else {
-                if (!backgroundActive) {
+            title={isRecording ? '⏹  STOP & SEND' : '🎤  TALK TO ARIA'}
+            color={isRecording ? colors.error : colors.cyan}
+            onPress={toggleRecording}
+            size="hero"
+            style={styles.heroButton}
+          />
+        </View>
+
+        {/* Action Grid */}
+        <View style={styles.gridSection}>
+          <View style={styles.gridRow}>
+            <GlowButton
+              title="Meeting"
+              icon="📋"
+              color={meetingState.isRecording ? colors.error : colors.purple}
+              onPress={async () => {
+                if (meetingState.isRecording) {
+                  await meetingService.stopRecording();
+                } else {
+                  if (!backgroundActive) {
+                    await backgroundService.start();
+                    setBackgroundActive(true);
+                  }
+                  await meetingService.startRecording();
+                }
+              }}
+              size="medium"
+              style={styles.gridButton}
+            />
+            <GlowButton
+              title={backgroundActive ? 'BG: ON' : 'BG: OFF'}
+              icon={backgroundActive ? '🟢' : '⭘'}
+              color={backgroundActive ? colors.success : colors.textMuted}
+              onPress={async () => {
+                if (backgroundActive) {
+                  await backgroundService.stop();
+                  setBackgroundActive(false);
+                } else {
                   await backgroundService.start();
                   setBackgroundActive(true);
                 }
-                await meetingService.startRecording();
-              }
-            }}
-            size="medium"
-            style={styles.gridButton}
-          />
-          <GlowButton
-            title={backgroundActive ? 'BG: ON' : 'BG: OFF'}
-            icon={backgroundActive ? '🟢' : '🔴'}
-            color={backgroundActive ? colors.success : colors.textMuted}
-            onPress={async () => {
-              if (backgroundActive) {
-                await backgroundService.stop();
-                setBackgroundActive(false);
-              } else {
-                await backgroundService.start();
-                setBackgroundActive(true);
-              }
-            }}
-            size="medium"
-            style={styles.gridButton}
-          />
+              }}
+              size="medium"
+              style={styles.gridButton}
+            />
+          </View>
+          <View style={styles.gridRow}>
+            <GlowButton
+              title="Settings"
+              icon="⚙️"
+              color={colors.textSecondary}
+              onPress={() => setCurrentScreen('settings')}
+              size="medium"
+              style={styles.gridButton}
+            />
+            <GlowButton
+              title="Location"
+              icon="📍"
+              color={colors.warning}
+              onPress={async () => {
+                try {
+                  const result = await locationService.getLocation({ desiredAccuracy: 'balanced' });
+                  addLog(`📍 ${result.lat.toFixed(4)}, ${result.lon.toFixed(4)}`);
+                } catch (error) {
+                  addLog(`📍 Error: ${error}`);
+                }
+              }}
+              size="medium"
+              style={styles.gridButton}
+            />
+          </View>
         </View>
-        <View style={styles.gridRow}>
-          <GlowButton
-            title="Settings"
-            icon="⚙️"
-            color={colors.textSecondary}
-            onPress={() => setCurrentScreen('settings')}
-            size="medium"
-            style={styles.gridButton}
-          />
-          <GlowButton
-            title="Location"
-            icon="📍"
-            color={colors.warning}
-            onPress={async () => {
-              try {
-                const result = await locationService.getLocation({ desiredAccuracy: 'balanced' });
-                addLog(`📍 ${result.lat.toFixed(4)}, ${result.lon.toFixed(4)}`);
-              } catch (error) {
-                addLog(`📍 Error: ${error}`);
-              }
-            }}
-            size="medium"
-            style={styles.gridButton}
-          />
-        </View>
-      </View>
 
-      {/* Meeting Recording Status (if active) */}
-      {meetingState.status !== 'idle' && (
-        <View style={styles.card}>
-          <MeetingRecorder
-            state={meetingState}
-            onStart={async () => {
-              if (!backgroundActive) {
-                await backgroundService.start();
-                setBackgroundActive(true);
-              }
-              await meetingService.startRecording();
-            }}
-            onStop={() => meetingService.stopRecording()}
-          />
-        </View>
-      )}
+        {/* Meeting Recording Status (if active) */}
+        {meetingState.status !== 'idle' && (
+          <View style={styles.cardSection}>
+            <GlassCard borderGlow={colors.error}>
+              <MeetingRecorder
+                state={meetingState}
+                onStart={async () => {
+                  if (!backgroundActive) {
+                    await backgroundService.start();
+                    setBackgroundActive(true);
+                  }
+                  await meetingService.startRecording();
+                }}
+                onStop={() => meetingService.stopRecording()}
+              />
+            </GlassCard>
+          </View>
+        )}
 
-      {/* System Log */}
-      <View style={[styles.card, { marginBottom: spacing.xxl }]}>
-        <LogViewer
-          logs={logs}
-          onClear={() => setLogs([])}
-          maxHeight={180}
-        />
-      </View>
-    </ScrollView>
+        {/* System Log */}
+        <View style={[styles.cardSection, { marginBottom: spacing.xxl * 2 }]}>
+          <GlassCard noPadding borderGlow={colors.success}>
+            <LogViewer
+              logs={logs}
+              onClear={() => setLogs([])}
+              maxHeight={150}
+            />
+          </GlassCard>
+        </View>
+      </ScrollView>
+    </CircuitBackground>
   );
 
+  // ─── SETTINGS SCREEN ───
   const renderSettingsScreen = () => (
-    <ScrollView style={styles.screenScroll} contentContainerStyle={styles.screenContent}>
-      {/* Header */}
-      <View style={styles.settingsHeader}>
-        <TouchableOpacity onPress={() => setCurrentScreen('home')}>
-          <Text style={styles.backButton}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.settingsTitle}>SETTINGS</Text>
-        <View style={{ width: 60 }} />
-      </View>
-
-      {/* Gateway Connection */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Gateway Connection</Text>
-        <View style={styles.inputRow}>
-          <TextInput
-            style={[styles.input, { flex: 3 }]}
-            placeholder="Host (IP or hostname)"
-            placeholderTextColor={colors.textMuted}
-            value={host}
-            onChangeText={setHost}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            placeholder="Port"
-            placeholderTextColor={colors.textMuted}
-            value={port}
-            onChangeText={setPort}
-            keyboardType="numeric"
-          />
+    <CircuitBackground glowIntensity={0.2}>
+      <ScrollView
+        style={styles.screenScroll}
+        contentContainerStyle={styles.settingsContent}
+      >
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity onPress={() => setCurrentScreen('home')}>
+            <Text style={styles.backButton}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.screenTitle}>SETTINGS</Text>
+          <View style={{ width: 60 }} />
         </View>
-        <TextInput
-          style={[styles.input, { marginTop: spacing.sm }]}
-          placeholder="Gateway Token"
-          placeholderTextColor={colors.textMuted}
-          value={token}
-          onChangeText={setToken}
-          autoCapitalize="none"
-          autoCorrect={false}
-          secureTextEntry
-        />
-        <View style={{ marginTop: spacing.md }}>
-          {connectionState === 'disconnected' ? (
-            <GlowButton title="Connect" icon="🔌" color={colors.cyan} onPress={handleConnect} />
-          ) : (
-            <GlowButton title="Disconnect" icon="⛓️‍💥" color={colors.error} onPress={handleDisconnect} />
-          )}
+
+        {/* Gateway Connection */}
+        <View style={styles.cardSection}>
+          <GlassCard borderGlow={colors.cyan}>
+            <Text style={styles.cardTitle}>Gateway Connection</Text>
+            <View style={styles.inputRow}>
+              <TextInput
+                style={[styles.input, { flex: 3 }]}
+                placeholder="Host (IP or hostname)"
+                placeholderTextColor={colors.textMuted}
+                value={host}
+                onChangeText={setHost}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                placeholder="Port"
+                placeholderTextColor={colors.textMuted}
+                value={port}
+                onChangeText={setPort}
+                keyboardType="numeric"
+              />
+            </View>
+            <TextInput
+              style={[styles.input, { marginTop: spacing.sm }]}
+              placeholder="Gateway Token"
+              placeholderTextColor={colors.textMuted}
+              value={token}
+              onChangeText={setToken}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+            />
+            <View style={{ marginTop: spacing.md }}>
+              {connectionState === 'disconnected' ? (
+                <GlowButton title="Connect" icon="🔌" color={colors.cyan} onPress={handleConnect} />
+              ) : (
+                <GlowButton title="Disconnect" icon="⛓️‍💥" color={colors.error} onPress={handleDisconnect} />
+              )}
+            </View>
+          </GlassCard>
         </View>
-      </View>
 
-      {/* Permissions */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Permissions</Text>
-        <PermissionRow label="Camera" granted={!!cameraPermission?.granted} />
-        <PermissionRow label="Location" granted={locationPermission} detail={locationService.getMode()} />
-        <PermissionRow label="Microphone" granted={micPermission} />
-        <View style={{ marginTop: spacing.md }}>
-          <GlowButton title="Request All" icon="🔑" color={colors.purple} onPress={requestPermissions} />
+        {/* Permissions */}
+        <View style={styles.cardSection}>
+          <GlassCard borderGlow={colors.purple}>
+            <Text style={styles.cardTitle}>Permissions</Text>
+            <PermissionRow label="Camera" granted={!!cameraPermission?.granted} />
+            <PermissionRow label="Location" granted={locationPermission} detail={locationService.getMode()} />
+            <PermissionRow label="Microphone" granted={micPermission} />
+            <View style={{ marginTop: spacing.md }}>
+              <GlowButton title="Request All" icon="🔑" color={colors.purple} onPress={requestPermissions} />
+            </View>
+          </GlassCard>
         </View>
-      </View>
 
-      {/* Danger Zone */}
-      <View style={styles.card}>
-        <Text style={[styles.cardTitle, { color: colors.error }]}>Danger Zone</Text>
-        <GlowButton
-          title="Reset Pairing"
-          icon="🔄"
-          color={colors.warning}
-          onPress={async () => {
-            await gateway.resetPairing();
-            addLog('Pairing reset');
-            Alert.alert('Reset', 'Device ID regenerated. Reconnect to pair.');
-          }}
-        />
-      </View>
+        {/* Danger Zone */}
+        <View style={styles.cardSection}>
+          <GlassCard borderGlow={colors.error}>
+            <Text style={[styles.cardTitle, { color: colors.error }]}>Danger Zone</Text>
+            <GlowButton
+              title="Reset Pairing"
+              icon="🔄"
+              color={colors.warning}
+              onPress={async () => {
+                await gateway.resetPairing();
+                addLog('Pairing reset');
+                Alert.alert('Reset', 'Device ID regenerated. Reconnect to pair.');
+              }}
+            />
+          </GlassCard>
+        </View>
 
-      {/* About */}
-      <View style={[styles.card, { marginBottom: spacing.xxl }]}>
-        <Text style={styles.cardTitle}>About</Text>
-        <Text style={styles.aboutText}>Aria Node v{APP_VERSION}</Text>
-        <Text style={styles.aboutText}>Cyberpunk Edition ⚡</Text>
-        <Text style={[styles.aboutText, { color: colors.textMuted, marginTop: spacing.sm }]}>
-          Extending Aria's senses to the physical world.
-        </Text>
-      </View>
-    </ScrollView>
+        {/* About */}
+        <View style={[styles.cardSection, { marginBottom: spacing.xxl * 2 }]}>
+          <GlassCard>
+            <Text style={styles.cardTitle}>About</Text>
+            <Text style={styles.aboutText}>Aria Node v{APP_VERSION}</Text>
+            <Text style={styles.aboutText}>Circuit Board Edition ⚡</Text>
+            <Text style={[styles.aboutText, { color: colors.textMuted, marginTop: spacing.sm }]}>
+              Extending Aria's senses to the physical world.
+            </Text>
+          </GlassCard>
+        </View>
+      </ScrollView>
+    </CircuitBackground>
   );
 
+  // ─── NOW PLAYING SCREEN ───
   const renderNowPlayingScreen = () => (
-    <View style={[styles.screenScroll, { flex: 1 }]}>
+    <CircuitBackground glowIntensity={nowPlaying?.isPlaying ? 0.8 : 0.4}>
       {/* Header */}
-      <View style={styles.settingsHeader}>
+      <View style={styles.screenHeader}>
         <TouchableOpacity onPress={() => setCurrentScreen('home')}>
           <Text style={styles.backButton}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.settingsTitle}>NOW PLAYING</Text>
+        <Text style={styles.screenTitle}>NOW PLAYING</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -533,12 +567,12 @@ export default function App() {
           </View>
         )}
       </View>
-    </View>
+    </CircuitBackground>
   );
 
   return (
     <SafeAreaView style={common.screen}>
-      <StatusBar style="light" />
+      <StatusBar style="light" translucent />
 
       {/* Hidden camera for captures */}
       {cameraPermission?.granted && (
@@ -577,42 +611,28 @@ const styles = StyleSheet.create({
   screenScroll: {
     flex: 1,
   },
-  screenContent: {
+  homeContent: {
+    paddingBottom: spacing.xxl,
+  },
+  settingsContent: {
     paddingBottom: spacing.xxl,
   },
 
-  // Hero
-  heroSection: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  heroTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  // Core Orb section
+  orbSection: {
     alignItems: 'center',
-  },
-  heroTitle: {
-    fontSize: fontSize.hero,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    letterSpacing: 4,
-  },
-  heroSubtitle: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    letterSpacing: 3,
-    fontFamily: 'monospace',
-    marginTop: 2,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
   },
 
   // Action section
   actionSection: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
   },
   heroButton: {
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.lg,
+    backgroundColor: 'rgba(0, 212, 255, 0.08)',
   },
 
   // Grid
@@ -626,15 +646,11 @@ const styles = StyleSheet.create({
   },
   gridButton: {
     flex: 1,
+    backgroundColor: 'rgba(12, 12, 30, 0.6)',
   },
 
   // Cards
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
-    padding: spacing.lg,
+  cardSection: {
     marginHorizontal: spacing.md,
     marginTop: spacing.md,
   },
@@ -646,22 +662,22 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Settings
-  settingsHeader: {
+  // Screen headers
+  screenHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.surfaceBorder,
+    borderBottomColor: 'rgba(37, 37, 80, 0.5)',
   },
   backButton: {
     color: colors.cyan,
     fontSize: fontSize.md,
     fontWeight: '600',
   },
-  settingsTitle: {
+  screenTitle: {
     color: colors.textPrimary,
     fontSize: fontSize.md,
     fontWeight: '700',
@@ -675,7 +691,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   input: {
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(10, 10, 20, 0.6)',
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
@@ -691,7 +707,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.surfaceBorder,
+    borderBottomColor: 'rgba(37, 37, 80, 0.3)',
   },
   permLabel: {
     color: colors.textSecondary,

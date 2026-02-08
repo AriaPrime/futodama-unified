@@ -107,11 +107,7 @@ export function NowPlayingCard({ data, onPress, expanded = false, audioState, on
 
   // Mini card for home screen
   return (
-    <TouchableOpacity
-      style={[styles.miniCard, glow(colors.cyan, 0.3)]}
-      onPress={onPress}
-      activeOpacity={0.8}
-    >
+    <View style={styles.miniCard}>
       {data.imageUrl && (
         <Image source={{ uri: data.imageUrl }} style={styles.miniArtwork} />
       )}
@@ -130,7 +126,7 @@ export function NowPlayingCard({ data, onPress, expanded = false, audioState, on
           ▮▯▮
         </Animated.Text>
       )}
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -229,13 +225,7 @@ const styles = StyleSheet.create({
   miniCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.cyanDim,
-    padding: spacing.sm,
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
+    padding: spacing.xs,
   },
   miniArtwork: {
     width: 48,

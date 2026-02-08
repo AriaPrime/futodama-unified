@@ -38,10 +38,6 @@ export function LogViewer({ logs, onClear, maxHeight = 200 }: LogViewerProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#06060e',
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
     overflow: 'hidden',
   },
   header: {
